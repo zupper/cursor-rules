@@ -1,0 +1,119 @@
+---
+description: Feature Documentation Rule
+globs: "docs/features/**/*.md"
+alwaysApply: true
+---
+# Feature Documentation Rule
+
+This rule defines standards for documenting user-facing features, ensuring documentation remains focused on business value and user experience rather than technical implementation.
+
+<rule>
+name: feature_documentation_rule
+description: Enforces business-focused feature documentation standards
+filters:
+  - type: file_extension
+    pattern: "\\.md$"
+  - type: directory
+    pattern: "docs/features"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject technical implementation details
+      - pattern: "(?:class|interface|function|method|constructor|private|public|protected|static|import|export|extends|implements)"
+        message: "Feature documentation should focus on user experience, not technical implementation details."
+        
+      # Reject code blocks that show implementation
+      - pattern: "```(?:typescript|javascript|ts|js)\\n"
+        message: "Feature documentation should not include code blocks. Technical details belong in technical documentation."
+        
+      # Reject technical terminology
+      - pattern: "(?:dependency injection|interface|class|method|implementation|algorithm|data structure|object-oriented|inheritance)"
+        message: "Use business language, not technical terminology, in feature documentation."
+
+  - type: suggest
+    message: |
+      Feature Documentation Best Practices:
+
+      1. Structure:
+         - Each feature document should start with a clear title and overview
+         - Organize features into logical sections with H2/H3 headings
+         - Use bullet points for feature lists
+         - Bold key terms for emphasis
+
+      2. Content Focus:
+         - What the feature does from a user perspective
+         - How users interact with the feature
+         - Benefits the feature provides
+         - Visual descriptions of what users see
+         - User flows and outcomes
+
+      3. Terminology:
+         - Use business and user-focused language
+         - Avoid technical implementation details
+         - Use consistent naming across feature docs
+         - Define any domain-specific terms
+
+      4. Example Format:
+         ```markdown
+         # Feature Name
+
+         ## Overview
+         Brief description of the feature and its main value.
+
+         ## Features
+
+         ### 1. Main Capability
+         - What users can do with this feature
+         - How it appears to users
+         - Benefits to users
+         - Special behaviors or states
+
+         ### 2. Secondary Capability
+         - Additional functionality details
+         - Visual descriptions
+         - User interactions
+         ```
+
+examples:
+  - input: |
+      # Product Animation
+
+      The ProductView class handles the animation using requestAnimationFrame to 
+      ensure smooth performance. It stores the rotation state in a private 
+      property and updates the transform CSS property.
+
+    output: |
+      # Product Animation Feature
+
+      ## Overview
+      The product animation feature provides an engaging interactive element that 
+      responds to user interactions with different display effects and visual feedback.
+
+      ## Features
+
+      ### 1. Interactive Product
+      - A visually appealing product at the center of the screen
+      - Changes appearance when you hover over it
+      - Responds to clicks with visual feedback
+      - Works smoothly on both desktop and mobile devices
+
+  - input: |
+      export interface PurchaseResult {
+        isSuccessful: boolean;
+        discount: number;
+      }
+
+      The system generates a random number to determine if the user gets a discount.
+
+    output: |
+      ### Purchase Outcomes
+      - Each product purchase has a chance to trigger a discount
+      - Exciting visual celebration when you receive a discount
+      - Product smoothly transitions when transaction completes
+      - Automatic reset after celebration to continue shopping
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

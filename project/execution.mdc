@@ -1,0 +1,101 @@
+---
+description: Project Execution Rule
+globs: "*.ts,*.js,package.json,README.md"
+alwaysApply: true
+---
+# Project Execution Rule
+
+This rule enforces that the entire project must be run only from the top-level directory using `npm run dev`. This ensures that both frontend and backend are started together with proper configuration.
+
+<rule>
+name: project_execution_rule
+description: Enforces that the project is run only from the top-level directory
+filters:
+  - type: file_extension
+    pattern: "\\.(?:ts|js|json|md)$"
+  - type: content
+    pattern: "(?:npm|yarn)\\s+(?:run|start)\\s+"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject attempts to run frontend or API separately
+      - pattern: "cd\\s+(?:frontend|api).*?(?:npm|yarn)\\s+(?:run|start)"
+        message: "Do not run frontend or API separately. Run the entire project from the top-level directory using 'npm run dev'."
+        
+      # Reject incorrect mentions of running the project
+      - pattern: "(?:npm|yarn)\\s+(?:run|start)\\s+(?!dev\\b)\\w+"
+        message: "The project must be run using 'npm run dev' from the top-level directory."
+        validate: |
+          // Allow other commands if they're not about running the server
+          if (!content.includes('start') && !content.includes('run the') && !content.includes('execute')) {
+            return true;
+          }
+          return "Use 'npm run dev' from the top-level directory to run the entire project.";
+
+  - type: suggest
+    message: |
+      Project Execution Best Practices:
+
+      1. Always run the project from the top-level directory:
+         ```bash
+         # Correct way to run the project
+         cd /path/to/new-luckbox
+         npm run dev
+         ```
+
+      2. This ensures:
+         - Both frontend and backend start correctly
+         - Proper environment configuration
+         - WebSocket connections work properly
+         - No need to run separate commands for each component
+
+      3. Do not run frontend or backend separately:
+         ```bash
+         # Incorrect - don't do this
+         cd frontend && npm run dev
+         # or
+         cd api && npm run dev
+         ```
+
+examples:
+  - input: |
+      # Getting Started
+      
+      Start the development server with:
+      
+      ```bash
+      cd frontend
+      npm run dev
+      ```
+      
+      In a separate terminal, start the backend:
+      
+      ```bash
+      cd api
+      npm run dev
+      ```
+
+    output: |
+      # Getting Started
+      
+      Start the development server with:
+      
+      ```bash
+      npm run dev
+      ```
+      
+      This will launch both the frontend and backend services.
+
+  - input: |
+      // Launch the application by running:
+      // $ npm start
+
+    output: |
+      // Launch the application by running:
+      // $ npm run dev
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

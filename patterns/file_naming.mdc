@@ -1,0 +1,107 @@
+---
+description: File Naming Rule
+globs: **/src/**/*.ts
+alwaysApply: true
+---
+# File Naming Rule
+
+This rule enforces consistent file naming based on the primary implementation within the file.
+
+<rule>
+name: file_naming_rule
+description: Enforces file naming based on the primary implementation
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?s)class|interface|type"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject files where the primary class/interface name doesn't match the filename
+      - pattern: "export\\s+(?:class|interface)\\s+([A-Za-z]+)(?:<[^>]*>)?\\s*[{|]"
+        message: "File name must match the primary class/interface name. If the primary implementation is 'Product', the file should be named 'Product.ts'"
+        capture: 1
+        validate: |
+          const primaryName = capture[1];
+          const fileName = file.name.replace(/\.ts$/, '');
+          if (primaryName !== fileName) {
+            return `File '${file.name}' should be renamed to '${primaryName}.ts' as it contains the primary implementation '${primaryName}'`;
+          }
+
+  - type: suggest
+    message: |
+      When naming files:
+
+      1. Use the primary implementation name:
+         ```typescript
+         // Product.ts
+         export class Product { ... }
+         export type ProductType = { ... }
+         export interface ProductDimension { ... }
+         ```
+
+      2. If multiple implementations exist, use the most important one:
+         ```typescript
+         // OrderService.ts
+         export interface OrderService { ... }
+         export type OrderResult = { ... }
+         export class OrderManager { ... }
+         ```
+
+      3. For utility files with multiple exports:
+         ```typescript
+         // types.ts (acceptable for shared types)
+         export type SharedType1 = { ... }
+         export type SharedType2 = { ... }
+         ```
+
+      4. For view components:
+         ```typescript
+         // ProductView.ts
+         export class ProductView { ... }
+         export type ProductViewProps = { ... }
+         ```
+
+examples:
+  - input: |
+      // product-component.ts
+      export class Product {
+        // implementation
+      }
+      export type ProductType = {
+        // type definition
+      }
+
+    output: |
+      // Product.ts
+      export class Product {
+        // implementation
+      }
+      export type ProductType = {
+        // type definition
+      }
+
+  - input: |
+      // order-manager.ts
+      export interface OrderService {
+        // interface definition
+      }
+      export class OrderManager {
+        // implementation
+      }
+
+    output: |
+      // OrderService.ts
+      export interface OrderService {
+        // interface definition
+      }
+      export class OrderManager {
+        // implementation
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule> 

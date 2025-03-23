@@ -1,0 +1,217 @@
+---
+description: Clean Architecture Rule
+globs: **/src/**/*.ts
+alwaysApply: true
+---
+# Clean Architecture Rule
+
+This rule enforces clean architecture principles and layer separation in the project.
+
+<rule>
+name: clean_architecture_rule
+description: Enforces clean architecture principles and layer separation
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: directory
+    pattern: "src/(?:application|infrastructure|api|view)"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject technical imports in application layer
+      - pattern: "import.*from.*['\"]\\.\\./(?!application).*['\"]"
+        message: "Application layer must not import from other layers. Use dependency injection and interfaces instead."
+        validate: |
+          if (!file.path.includes('/application/')) {
+            return true;
+          }
+          return "Application layer must be dependency-free and use only interfaces";
+
+      # Reject business logic in infrastructure layer
+      - pattern: "(?:if|for|while|switch)\\s*\\([^)]*\\b(?:validate|check|process|calculate|compute|determine|evaluate|assess|analyze)\\b[^)]*\\)"
+        message: "Infrastructure layer should not contain business logic. Move it to the application layer."
+        validate: |
+          if (!file.path.includes('/infrastructure/')) {
+            return true;
+          }
+          return "Infrastructure layer should only contain technical implementations";
+
+      # Reject direct database/HTTP/WebSocket usage in application layer
+      - pattern: "(?:fetch|axios|socket|io|mongoose|prisma|sequelize|typeorm|redis|postgres|mysql|mongodb)"
+        message: "Application layer must not use technical implementations directly. Use interfaces and dependency injection."
+        validate: |
+          if (!file.path.includes('/application/')) {
+            return true;
+          }
+          return "Application layer must be free of technical implementations";
+
+  - type: suggest
+    message: |
+      Project Structure and Layer Responsibilities:
+
+      1. Application Layer (src/application/):
+         ```typescript
+         // Good: Pure business logic with interfaces
+         export interface UserRepository {
+           findById(id: string): Promise<User>;
+         }
+
+         export class UserService {
+           constructor(private readonly userRepo: UserRepository) {}
+           
+           async validateUserAccess(userId: string): Promise<boolean> {
+             const user = await this.userRepo.findById(userId);
+             return user.hasValidSubscription();
+           }
+         }
+
+         // Bad: Technical implementations
+         export class UserService {
+           constructor(private readonly db: Database) {}
+           
+           async validateUserAccess(userId: string): Promise<boolean> {
+             const user = await this.db.users.findOne({ id: userId });
+             return user.subscription.isValid;
+           }
+         }
+         ```
+
+      2. Infrastructure Layer (src/infrastructure/):
+         ```typescript
+         // Good: Technical implementations of interfaces
+         export class PostgresUserRepository implements UserRepository {
+           constructor(private readonly pool: Pool) {}
+           
+           async findById(id: string): Promise<User> {
+             const result = await this.pool.query(
+               'SELECT * FROM users WHERE id = $1',
+               [id]
+             );
+             return this.mapToUser(result.rows[0]);
+           }
+         }
+
+         // Bad: Business logic
+         export class PostgresUserRepository implements UserRepository {
+           async findById(id: string): Promise<User> {
+             const user = await this.pool.query(
+               'SELECT * FROM users WHERE id = $1',
+               [id]
+             );
+             if (!user.hasValidSubscription()) {
+               throw new Error('User subscription invalid');
+             }
+             return user;
+           }
+         }
+         ```
+
+      3. API/View Layer (src/api/ or src/view/):
+         ```typescript
+         // Good: Route handlers using application services
+         export class UserController {
+           constructor(private readonly userService: UserService) {}
+           
+           async handleGetUser(req: Request, res: Response) {
+             const user = await this.userService.getUser(req.params.id);
+             res.json(user);
+           }
+         }
+
+         // Bad: Direct database access
+         export class UserController {
+           async handleGetUser(req: Request, res: Response) {
+             const user = await db.users.findOne({ id: req.params.id });
+             res.json(user);
+           }
+         }
+         ```
+
+      Layer Responsibilities:
+
+      1. Application Layer:
+         - Business rules and logic
+         - Domain models and entities
+         - Use cases and processes
+         - Interface definitions
+         - No technical dependencies
+
+      2. Infrastructure Layer:
+         - Technical implementations
+         - Database access
+         - HTTP clients
+         - WebSocket connections
+         - External service integrations
+         - No business logic
+
+      3. API/View Layer:
+         - Route handlers
+         - Controllers
+         - Middleware
+         - View components
+         - UI logic
+         - No direct data access
+
+examples:
+  - input: |
+      // Bad: Application layer with technical dependencies
+      import { Pool } from 'pg';
+      
+      export class UserService {
+        constructor(private readonly pool: Pool) {}
+        
+        async getUser(id: string) {
+          const result = await this.pool.query(
+            'SELECT * FROM users WHERE id = $1',
+            [id]
+          );
+          return result.rows[0];
+        }
+      }
+
+    output: |
+      // Good: Application layer with interfaces
+      export interface UserRepository {
+        findById(id: string): Promise<User>;
+      }
+      
+      export class UserService {
+        constructor(private readonly userRepo: UserRepository) {}
+        
+        async getUser(id: string) {
+          return this.userRepo.findById(id);
+        }
+      }
+
+  - input: |
+      // Bad: Infrastructure layer with business logic
+      export class PostgresUserRepository {
+        async findById(id: string) {
+          const user = await this.pool.query(
+            'SELECT * FROM users WHERE id = $1',
+            [id]
+          );
+          if (!user.isActive) {
+            throw new Error('User is inactive');
+          }
+          return user;
+        }
+      }
+
+    output: |
+      // Good: Infrastructure layer with pure technical implementation
+      export class PostgresUserRepository implements UserRepository {
+        async findById(id: string) {
+          const result = await this.pool.query(
+            'SELECT * FROM users WHERE id = $1',
+            [id]
+          );
+          return this.mapToUser(result.rows[0]);
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule> 

@@ -1,0 +1,163 @@
+# Generic Examples Rule
+
+This meta-rule ensures that Cursor rules use generic, broadly applicable examples instead of domain-specific terminology or implementations that might not be relevant to other projects.
+
+<rule>
+name: generic_examples_rule
+description: Enforces the use of generic terminology and examples in all Cursor rules
+filters:
+  - type: file_extension
+    pattern: "\\.mdc$"
+  - type: directory
+    pattern: "\\.cursor/rules"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject domain-specific terminology in examples
+      - pattern: "examples:[\\s\\S]*?(?:domain-specific-term-1|domain-specific-term-2|project-name|specific-feature|specific-domain-concept)"
+        message: "Examples should use generic terminology instead of domain-specific terms. Use terms like 'product', 'order', 'item', 'user' instead."
+        validate: |
+          // This validator will check for domain-specific terms without hardcoding them here
+          const domainSpecificTerms = [
+            // This list would be populated with domain-specific terms
+            // but we don't include them here to maintain neutrality
+          ];
+          
+          if (content.includes('examples:')) {
+            const examplesContent = content.substring(content.indexOf('examples:'));
+            for (const term of domainSpecificTerms) {
+              if (examplesContent.toLowerCase().includes(term.toLowerCase())) {
+                return `Examples should use generic terminology instead of domain-specific terms like '${term}'. Use terms like 'product', 'order', 'item', 'user' instead.`;
+              }
+            }
+          }
+          return true;
+        
+      # Reject domain-specific paths or filenames
+      - pattern: "examples:[\\s\\S]*?(?:src/(?:domain-specific-feature)|SpecificResult|SpecificManager)"
+        message: "Examples should use generic file paths and class names. Use terms like 'ProductView', 'OrderService', 'ItemRepository', etc."
+        
+      # Reject domain-specific events or actions
+      - pattern: "examples:[\\s\\S]*?(?:'domain:|'feature:|'specific:|domain:event|feature:action)"
+        message: "Examples should use generic event names. Use patterns like 'product:display', 'order:complete', 'user:login', etc."
+
+  - type: suggest
+    message: |
+      When creating rule examples:
+
+      1. Use Generic Terminology:
+         - Prefer generic terms like: product, order, item, user, account
+         - Avoid domain-specific terms that are unique to particular projects
+         
+      2. Use Generic File Paths and Class Names:
+         - Prefer: ProductService, OrderManager, UserRepository
+         - Avoid: [Domain]Service, [Feature]Manager, [ProjectSpecific]Repository
+         
+      3. Use Generic Event Names:
+         - Prefer: product:display, order:complete, user:login
+         - Avoid: [domain]:[specific-action], [feature]:[domain-action]
+         
+      4. Use Generic UI Examples:
+         - Prefer: button click, form submit, data display
+         - Avoid: domain-specific UI elements or animations
+         
+      5. Examples Should Transfer Across Domains:
+         - Banking
+         - E-commerce
+         - Social media
+         - Content management
+         - Any other domain
+
+      Remember, the goal is for examples to be easily understood by any developer, regardless of the specific project context.
+
+examples:
+  - input: |
+      // Bad: Domain-specific example
+      ```typescript
+      // FeatureView.ts
+      export class FeatureView {
+        #handleSpecificEvent(): void {
+          this.app.onEvent('domain:specific', (result) => {
+            if (result.isSpecialCase) {
+              this.showDomainSpecificAnimation();
+            }
+          });
+        }
+      }
+      ```
+
+    output: |
+      // Good: Generic example
+      ```typescript
+      // ProductView.ts
+      export class ProductView {
+        #handleDisplayResult(): void {
+          this.app.onEvent('product:displayResult', (result) => {
+            if (result.isHighlighted) {
+              this.showHighlightAnimation();
+            }
+          });
+        }
+      }
+      ```
+
+  - input: |
+      // Bad: Domain-specific terminology
+      ```typescript
+      export class SpecificFeatureManager {
+        calculateSpecificOdds(): number {
+          // Implementation
+        }
+        
+        triggerSpecificAnimation(): void {
+          // Implementation
+        }
+      }
+      ```
+
+    output: |
+      // Good: Generic terminology
+      ```typescript
+      export class OrderProcessor {
+        calculateDiscountRate(): number {
+          // Implementation
+        }
+        
+        triggerSuccessAnimation(): void {
+          // Implementation
+        }
+      }
+      ```
+
+  - input: |
+      // Bad: Domain-specific architecture example
+      When creating a SpecificDomainService, you should...
+      ```typescript
+      export interface DomainRepository {
+        getNextItem(): Promise<DomainItem>;
+        updateItemStatus(itemId: string, status: ItemStatus): Promise<void>;
+      }
+      
+      // Usage in DomainService.ts
+      ...
+      ```
+
+    output: |
+      // Good: Generic architecture example
+      When creating a ProductService, you should...
+      ```typescript
+      export interface ProductRepository {
+        getAvailableProduct(): Promise<Product>;
+        updateProductStatus(productId: string, status: ProductStatus): Promise<void>;
+      }
+      
+      // Usage in ProductService.ts
+      ...
+      ```
+
+metadata:
+  priority: high
+  version: 1.1
+  tags: ["meta", "documentation", "standards"]
+</rule> 

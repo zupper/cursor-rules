@@ -1,0 +1,204 @@
+---
+description: Cursor Rules Location
+globs: *.mdc
+---
+# Cursor Rule Format
+
+This meta-rule defines the proper structure and format for creating Cursor rules to ensure consistency across the project's static analysis rules.
+
+<rule>
+name: cursor_rule_format
+description: Defines the standard structure and format for Cursor rules
+filters:
+  - type: file_extension
+    pattern: "\\.mdc$"
+  - type: directory
+    pattern: "\\.cursor/rules"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject rules without the <rule> tag
+      - pattern: "^(?!.*<rule>).*$"
+        message: "Cursor rules must include a <rule> tag with proper attributes."
+        
+      # Reject rules without proper name
+      - pattern: "<rule>\\s*?(?!.*name:)"
+        message: "Cursor rules must have a 'name' attribute that matches the filename."
+        
+      # Reject rules without filters
+      - pattern: "<rule>\\s*?(?!.*filters:)"
+        message: "Cursor rules must specify at least one filter to define which files they apply to."
+        
+      # Reject rules without actions
+      - pattern: "<rule>\\s*?(?!.*actions:)"
+        message: "Cursor rules must define at least one action (reject or suggest)."
+        
+      # Reject rules without examples
+      - pattern: "<rule>\\s*?(?!.*examples:)"
+        message: "Cursor rules must include examples to illustrate proper usage."
+        
+      # Reject rules without metadata
+      - pattern: "<rule>\\s*?(?!.*metadata:)"
+        message: "Cursor rules must include metadata with priority and version."
+
+  - type: suggest
+    message: |
+      Cursor Rule Structure Guide:
+
+      1. Basic Structure:
+         - Start with an H1 title (# Rule Name)
+         - Provide a concise description of the rule's purpose
+         - Wrap the rule definition in <rule> tags
+         - End with a closing </rule> tag
+
+      2. Required Components:
+         - name: Machine-readable identifier (should match filename without extension)
+         - description: One-line summary of the rule's purpose
+         - filters: Define which files the rule applies to (file extensions, directories)
+         - actions: Define what the rule checks for (reject patterns, suggestions)
+         - examples: Provide before/after examples to illustrate the rule
+         - metadata: Include priority and version information
+
+      3. Actions:
+         - reject: Patterns that should trigger errors/warnings with clear messages
+         - suggest: Helpful guidelines and examples for developers to follow
+
+      4. Examples Format:
+         - Provide pairs of input/output examples
+         - Show incorrect patterns and their corrected versions
+         - Use realistic code that demonstrates the rule's intent
+
+      5. Metadata:
+         - priority: high, medium, or low
+         - version: Semantic versioning (e.g., 1.0)
+         - Optional: tags and related_rules
+
+      Use clear, descriptive patterns and error messages to help developers understand and follow the rule.
+
+examples:
+  - input: |
+      # My Rule
+      
+      This is a rule.
+      
+      name: my_rule
+      description: Some description
+      filters:
+        - type: file_extension
+          pattern: "\\.ts$"
+      
+      actions:
+        - type: reject
+          conditions:
+            - pattern: "bad pattern"
+              message: "Don't do this"
+
+    output: |
+      # My Rule
+      
+      This is a rule that enforces specific patterns in TypeScript files.
+      
+      <rule>
+      name: my_rule
+      description: Enforces specific code patterns in TypeScript files
+      filters:
+        - type: file_extension
+          pattern: "\\.ts$"
+      
+      actions:
+        - type: reject
+          conditions:
+            - pattern: "bad pattern"
+              message: "Don't do this"
+              
+      examples:
+        - input: |
+            // Bad code example
+            function badExample() {
+              // Contains bad pattern
+            }
+            
+          output: |
+            // Good code example
+            function goodExample() {
+              // Fixed implementation
+            }
+            
+      metadata:
+        priority: medium
+        version: 1.0
+      </rule>
+
+  - input: |
+      # Incomplete Rule
+      
+      <rule>
+      name: incomplete_rule
+      description: Missing components
+      filters:
+        - type: file_extension
+          pattern: "\\.js$"
+      
+      actions:
+        - type: reject
+          conditions:
+            - pattern: "console\\.log"
+              message: "Don't use console.log"
+      </rule>
+
+    output: |
+      # Console Usage Rule
+      
+      This rule enforces proper logging practices by discouraging direct console usage.
+      
+      <rule>
+      name: console_usage_rule
+      description: Enforces proper logging practices in JavaScript files
+      filters:
+        - type: file_extension
+          pattern: "\\.js$"
+      
+      actions:
+        - type: reject
+          conditions:
+            - pattern: "console\\.log"
+              message: "Don't use console.log directly. Use the Logger service instead."
+        - type: suggest
+          message: |
+            Use the appropriate logging service:
+            ```javascript
+            // Instead of:
+            console.log('Debug info');
+            
+            // Use:
+            import { Logger } from './logger';
+            Logger.debug('Debug info');
+            ```
+      
+      examples:
+        - input: |
+            function processData(data) {
+              console.log('Processing data:', data);
+              return data.map(item => item * 2);
+            }
+            
+          output: |
+            import { Logger } from './logger';
+            
+            function processData(data) {
+              Logger.debug('Processing data:', data);
+              return data.map(item => item * 2);
+            }
+            
+      metadata:
+        priority: medium
+        version: 1.0
+        tags: ["logging", "best-practices"]
+      </rule>
+
+metadata:
+  priority: high
+  version: 1.0
+  tags: ["meta", "documentation", "standards"]
+</rule> 

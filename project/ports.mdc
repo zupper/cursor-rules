@@ -1,0 +1,119 @@
+---
+description: Project Ports and Hosts Rule
+globs: **/src/**/*.{ts,js,json,env}
+alwaysApply: true
+---
+
+# Project Ports and Hosts Rule
+
+This rule enforces the correct ports and hosts for the project's frontend and backend services.
+
+<rule>
+name: project_ports_rule
+description: Enforces correct ports and hosts for frontend and backend services
+filters:
+  - type: file_extension
+    pattern: "\\.(ts|js|json|env)$"
+  - type: content
+    pattern: "(?s)localhost|port|host|url|baseUrl"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject incorrect backend URL/port
+      - pattern: "(?:http|https)://(?:localhost|127\\.0\\.0\\.1):(?!3000)"
+        message: "Backend API must run on port 3000 (http://localhost:3000)"
+
+      # Reject incorrect frontend URL/port
+      - pattern: "(?:http|https)://(?:localhost|127\\.0\\.0\\.1):(?!8000)"
+        message: "Frontend must run on port 8000 (http://localhost:8000)"
+
+      # Reject hardcoded URLs that don't match the correct ports
+      - pattern: "['\"](mdc:?:http|https)://(?:localhost|127\\.0\\.0\\.1):(?!3000|8000)"
+        message: "URLs must use the correct ports: 3000 for backend, 8000 for frontend"
+
+  - type: suggest
+    message: |
+      When configuring ports and hosts:
+
+      1. Backend API Configuration:
+         ```typescript
+         // Good
+         const backendUrl = 'http://localhost:3000';
+         const apiUrl = 'http://localhost:3000/api';
+         
+         // Bad
+         const backendUrl = 'http://localhost:8080';
+         const apiUrl = 'http://localhost:5000/api';
+         ```
+
+      2. Frontend Configuration:
+         ```typescript
+         // Good
+         const frontendUrl = 'http://localhost:8000';
+         const devServer = {
+           port: 8000,
+           host: 'localhost'
+         };
+         
+         // Bad
+         const frontendUrl = 'http://localhost:3000';
+         const devServer = {
+           port: 3000,
+           host: 'localhost'
+         };
+         ```
+
+      3. Environment Variables:
+         ```env
+         # Good
+         VITE_API_URL=http://localhost:3000
+         VITE_FRONTEND_URL=http://localhost:8000
+         
+         # Bad
+         VITE_API_URL=http://localhost:8080
+         VITE_FRONTEND_URL=http://localhost:3000
+         ```
+
+      4. Development Scripts:
+         ```json
+         {
+           "scripts": {
+             "start": "vite --port 8000",
+             "dev": "vite --port 8000",
+             "api": "node server.js --port 3000"
+           }
+         }
+         ```
+
+examples:
+  - input: |
+      // Bad: Incorrect backend port
+      const apiUrl = 'http://localhost:8080/api';
+      
+      // Bad: Incorrect frontend port
+      const frontendUrl = 'http://localhost:3000';
+
+    output: |
+      // Good: Correct ports
+      const apiUrl = 'http://localhost:3000/api';
+      const frontendUrl = 'http://localhost:8000';
+
+  - input: |
+      // Bad: Hardcoded incorrect port
+      const config = {
+        backend: 'http://localhost:5000',
+        frontend: 'http://localhost:3000'
+      };
+
+    output: |
+      // Good: Correct ports
+      const config = {
+        backend: 'http://localhost:3000',
+        frontend: 'http://localhost:8000'
+      };
+
+metadata:
+  priority: high
+  version: 1.0
+</rule> 

@@ -1,0 +1,441 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+ # Dual-Protocol API Rule
+
+This rule ensures API controllers support both WebSocket and HTTP transports, and frontend clients prioritize WebSocket with HTTP fallback.
+
+<rule>
+name: dual_protocol_api_rule
+description: Enforces all APIs to work over both WebSocket and HTTP, with frontend fallback capability
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?:Controller|ApiClient|HttpClient|WebSocketClient|ApiService)"
+
+actions:
+  - type: reject
+    conditions:
+      # Backend: Reject controllers that don't support both protocols
+      - pattern: "class\\s+\\w+Controller"
+        validate: |
+          if (file.path.includes('/api/controllers/') || file.path.includes('/controllers/')) {
+            if (!content.includes('WebSocket') && !content.includes('wsService')) {
+              return "Controllers must support both HTTP and WebSocket protocols. Add WebSocket message handlers.";
+            }
+            if (!content.includes('router') && !content.includes('Request') && !content.includes('Response')) {
+              return "Controllers must support both HTTP and WebSocket protocols. Add HTTP route handlers.";
+            }
+          }
+          return true;
+      
+      # Backend: Reject controllers without shared operation logic
+      - pattern: "class\\s+\\w+Controller(?:[^{]*\\{){1,3}[^}]*handleHttp\\w+.*?handleWebSocket\\w+"
+        validate: |
+          if (file.path.includes('/api/controllers/') || file.path.includes('/controllers/')) {
+            if (!content.includes('handleOperation') && !content.includes('process') && !content.match(/(?:handle|process)[A-Z]\w+Operation/)) {
+              return "Controllers must share business logic between HTTP and WebSocket handlers using a unified approach. Extract common logic to a shared method.";
+            }
+          }
+          return true;
+          
+      # Frontend: Reject API clients without WebSocket and HTTP support
+      - pattern: "class\\s+\\w+(?:ApiClient|ApiService)"
+        validate: |
+          if (file.path.includes('/frontend/') || file.path.includes('/client/')) {
+            if (!content.includes('WebSocket') && !content.includes('ws') && !content.includes('socket')) {
+              return "API clients must support WebSocket as the primary transport method.";
+            }
+            if (!content.includes('http') && !content.includes('fetch') && !content.includes('axios')) {
+              return "API clients must support HTTP as a fallback transport method.";
+            }
+            if (!content.includes('fallback') && !content.match(/(?:try|catch|error|failed|retry|switch|alternate)/i)) {
+              return "API clients must implement fallback logic from WebSocket to HTTP.";
+            }
+          }
+          return true;
+
+  - type: suggest
+    message: |
+      # Dual-Protocol API Implementation
+
+      ## Backend Controllers
+
+      Controllers should support operations over both HTTP and WebSocket with a unified approach:
+
+      1. Structure:
+         - Implement handlers for both HTTP and WebSocket protocols
+         - Use a context-based approach to handle both protocols
+         - Extract business logic to shared methods
+         - Handle protocol-specific formatting separately
+
+      2. Implementation:
+         ```typescript
+         // Context pattern for handling different protocols
+         interface HttpContext {
+           type: 'http';
+           res: Response;
+           statusCode: number;
+         }
+
+         interface WebSocketContext {
+           type: 'websocket';
+           socketId: string;
+           requestId?: string;
+           eventName: string;
+         }
+
+         type OperationContext = HttpContext | WebSocketContext;
+
+         class ExampleController {
+           constructor(private deps: {
+             commandService: CommandService;
+             wsService: WebSocketService;
+           }) {
+             this.setupRoutes();
+             this.subscribeToEvents();
+           }
+
+           // Setup for both protocols
+           private setupRoutes(): void {
+             this.router.post('/operation', this.handleHttpOperation.bind(this));
+           }
+
+           private subscribeToEvents(): void {
+             this.deps.wsService.subscribeToMessageType(
+               MessageType.OPERATION,
+               this.handleWebSocketOperation.bind(this)
+             );
+           }
+
+           // Protocol-specific handlers
+           private async handleHttpOperation(req: Request, res: Response): Promise<void> {
+             const params = this.extractFromHttp(req);
+             const context: HttpContext = { type: 'http', res, statusCode: 200 };
+             
+             if (this.validateOperation(params, context)) {
+               await this.processOperation(params, context);
+             }
+           }
+
+           private async handleWebSocketOperation(socketId: string, message: WebSocketMessage): Promise<void> {
+             const params = this.extractFromWebSocket(message);
+             const context: WebSocketContext = {
+               type: 'websocket',
+               socketId,
+               requestId: message.requestId,
+               eventName: 'operation:result'
+             };
+             
+             if (this.validateOperation(params, context)) {
+               await this.processOperation(params, context);
+             }
+           }
+
+           // Shared business logic
+           private async processOperation(params: any, context: OperationContext): Promise<void> {
+             try {
+               const result = await this.deps.commandService.run(params);
+               this.sendResponse(result, context);
+             } catch (error) {
+               this.handleError(error, context);
+             }
+           }
+
+           // Protocol-specific response formatting
+           private sendResponse(result: any, context: OperationContext): void {
+             if (context.type === 'http') {
+               context.res.status(context.statusCode).json(result);
+             } else {
+               this.deps.wsService.sendToClient(
+                 context.socketId, 
+                 context.eventName, 
+                 { success: true, data: result, requestId: context.requestId }
+               );
+             }
+           }
+         }
+         ```
+
+      ## Frontend Clients
+
+      API clients should prefer WebSocket with HTTP fallback:
+
+      1. Design Pattern:
+         - Implement a hybrid client that supports both protocols 
+         - Try WebSocket first, fall back to HTTP on failure
+         - Make protocol selection transparent to calling code
+
+      2. Implementation:
+         ```typescript
+         export class HybridApiClient {
+           constructor(
+             private readonly wsClient: WebSocketClient,
+             private readonly httpClient: HttpClient
+           ) {}
+
+           async performOperation(params: OperationParams): Promise<OperationResult> {
+             try {
+               // Try WebSocket first
+               if (this.wsClient.isConnected()) {
+                 return await this.wsClient.sendRequest('operation', params);
+               }
+               throw new Error('WebSocket not connected');
+             } catch (error) {
+               console.warn('WebSocket request failed, falling back to HTTP', error);
+               // Fall back to HTTP
+               return this.httpClient.post('/operation', params);
+             }
+           }
+
+           // Advanced implementation can include:
+           // - Circuit breaker to avoid trying WebSocket when it's consistently failing
+           // - Automatic reconnection of WebSocket
+           // - Monitoring of WebSocket health
+           // - Configurable timeout for WebSocket requests
+         }
+         ```
+
+examples:
+  - input: |
+      // Bad: HTTP-only controller
+      export class ProductController {
+        private router = Router();
+        
+        constructor(private readonly productService: ProductService) {
+          this.setupRoutes();
+        }
+        
+        private setupRoutes() {
+          this.router.get('/products', this.getProducts.bind(this));
+          this.router.post('/products', this.createProduct.bind(this));
+        }
+        
+        private async getProducts(req: Request, res: Response) {
+          const products = await this.productService.findAll();
+          res.json(products);
+        }
+        
+        private async createProduct(req: Request, res: Response) {
+          const newProduct = await this.productService.create(req.body);
+          res.status(201).json(newProduct);
+        }
+        
+        public getRouter() {
+          return this.router;
+        }
+      }
+
+    output: |
+      // Good: Dual-protocol controller
+      export class ProductController {
+        private router = Router();
+        
+        constructor(private readonly deps: {
+          productService: ProductService;
+          wsService: WebSocketService;
+        }) {
+          this.setupRoutes();
+          this.subscribeToEvents();
+        }
+        
+        private setupRoutes() {
+          this.router.get('/products', this.handleHttpGetProducts.bind(this));
+          this.router.post('/products', this.handleHttpCreateProduct.bind(this));
+        }
+        
+        private subscribeToEvents() {
+          this.deps.wsService.subscribeToMessageType(
+            MessageType.GET_PRODUCTS,
+            this.handleWsGetProducts.bind(this)
+          );
+          
+          this.deps.wsService.subscribeToMessageType(
+            MessageType.CREATE_PRODUCT,
+            this.handleWsCreateProduct.bind(this)
+          );
+        }
+        
+        // HTTP handlers
+        private async handleHttpGetProducts(req: Request, res: Response) {
+          const filters = req.query;
+          await this.getProducts(filters, { type: 'http', res, statusCode: 200 });
+        }
+        
+        private async handleHttpCreateProduct(req: Request, res: Response) {
+          const productData = req.body;
+          await this.createProduct(productData, { type: 'http', res, statusCode: 201 });
+        }
+        
+        // WebSocket handlers
+        private async handleWsGetProducts(socketId: string, message: WebSocketMessage) {
+          const filters = message.payload?.filters || {};
+          await this.getProducts(filters, {
+            type: 'websocket',
+            socketId,
+            requestId: message.payload?.requestId,
+            eventName: 'products:list'
+          });
+        }
+        
+        private async handleWsCreateProduct(socketId: string, message: WebSocketMessage) {
+          const productData = message.payload?.product;
+          await this.createProduct(productData, {
+            type: 'websocket',
+            socketId,
+            requestId: message.payload?.requestId,
+            eventName: 'product:created'
+          });
+        }
+        
+        // Shared business logic
+        private async getProducts(filters: any, context: OperationContext) {
+          try {
+            const products = await this.deps.productService.findAll(filters);
+            
+            if (context.type === 'http') {
+              context.res.json(products);
+            } else {
+              this.deps.wsService.sendToClient(
+                context.socketId,
+                context.eventName,
+                { success: true, data: products, requestId: context.requestId }
+              );
+            }
+          } catch (error) {
+            this.handleError(error, context);
+          }
+        }
+        
+        private async createProduct(productData: any, context: OperationContext) {
+          try {
+            const newProduct = await this.deps.productService.create(productData);
+            
+            if (context.type === 'http') {
+              context.res.status(context.statusCode).json(newProduct);
+            } else {
+              this.deps.wsService.sendToClient(
+                context.socketId,
+                context.eventName,
+                { success: true, data: newProduct, requestId: context.requestId }
+              );
+            }
+          } catch (error) {
+            this.handleError(error, context);
+          }
+        }
+        
+        private handleError(error: any, context: OperationContext) {
+          console.error('Operation error:', error);
+          const message = error.message || 'An unexpected error occurred';
+          
+          if (context.type === 'http') {
+            context.res.status(400).json({ error: message });
+          } else {
+            this.deps.wsService.sendToClient(
+              context.socketId,
+              'error',
+              { success: false, error: message, requestId: context.requestId }
+            );
+          }
+        }
+        
+        public getRouter() {
+          return this.router;
+        }
+      }
+
+  - input: |
+      // Bad: WebSocket-only client with no fallback
+      export class ProductApiClient {
+        constructor(private readonly wsClient: WebSocketClient) {}
+        
+        async getProducts(filters = {}) {
+          return this.wsClient.sendRequest('get-products', { filters });
+        }
+        
+        async createProduct(productData) {
+          return this.wsClient.sendRequest('create-product', { product: productData });
+        }
+      }
+
+    output: |
+      // Good: Hybrid client with WebSocket priority and HTTP fallback
+      export class ProductApiClient {
+        private wsAvailable = true;
+        private readonly failureThreshold = 3;
+        private failures = 0;
+        
+        constructor(
+          private readonly wsClient: WebSocketClient, 
+          private readonly httpClient: HttpClient,
+          private readonly baseUrl: string = '/api'
+        ) {
+          // Set up WebSocket availability monitoring
+          this.wsClient.onDisconnect(() => {
+            this.wsAvailable = false;
+          });
+          
+          this.wsClient.onConnect(() => {
+            this.wsAvailable = true;
+            this.failures = 0;
+          });
+        }
+        
+        async getProducts(filters = {}) {
+          return this.sendRequest('get-products', filters, `${this.baseUrl}/products`);
+        }
+        
+        async createProduct(productData) {
+          return this.sendRequest(
+            'create-product', 
+            { product: productData }, 
+            `${this.baseUrl}/products`, 
+            'POST'
+          );
+        }
+        
+        private async sendRequest(
+          wsEvent: string, 
+          data: any, 
+          httpUrl: string, 
+          httpMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'
+        ) {
+          // Try WebSocket if available and within failure threshold
+          if (this.wsAvailable && this.failures < this.failureThreshold) {
+            try {
+              const response = await this.wsClient.sendRequest(wsEvent, data);
+              this.failures = 0; // Reset failures on success
+              return response;
+            } catch (error) {
+              this.failures++;
+              console.warn(`WebSocket request failed (${this.failures}/${this.failureThreshold}), falling back to HTTP`, error);
+              
+              // If we exceed the threshold, mark WebSocket as unavailable temporarily
+              if (this.failures >= this.failureThreshold) {
+                this.wsAvailable = false;
+                setTimeout(() => {
+                  this.wsAvailable = true;
+                  this.failures = 0;
+                }, 30000); // Try again after 30 seconds
+              }
+            }
+          }
+          
+          // Fall back to HTTP
+          if (httpMethod === 'GET') {
+            return this.httpClient.get(httpUrl, { params: data });
+          } else {
+            return this.httpClient[httpMethod.toLowerCase()](httpUrl, data);
+          }
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+  tags: ["api", "websocket", "http", "fallback", "controllers"]
+</rule>

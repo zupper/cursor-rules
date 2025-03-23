@@ -1,0 +1,156 @@
+---
+description: Rule Classification Rule
+globs: *.mdc
+alwaysApply: false
+---
+# Rule Classification Rule
+
+This rule enforces that new rules are properly classified and placed in the appropriate directory structure.
+
+<rule>
+name: rule_classification_rule
+description: Enforces proper classification and organization of rule files
+filters:
+  - type: file_extension
+    pattern: "\\.mdc$"
+  - type: directory
+    pattern: ".cursor/rules"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject rules not placed in a proper category directory
+      - pattern: "<rule>[\\s\\S]*?name:[\\s]+([a-z_]+)_rule"
+        validate: |
+          // Skip validation if the file is already in a proper category directory
+          const categoryDirs = ['architecture', 'workflow', 'patterns', 'project', 'meta'];
+          const dirMatch = file.path.match(/\.cursor\/rules\/([^\/]+)\//);
+          
+          if (dirMatch && categoryDirs.includes(dirMatch[1])) {
+            return true;
+          }
+          
+          return "Rule files must be placed in the appropriate category directory (architecture/, workflow/, patterns/, project/, or meta/).";
+
+      # Reject rules without proper description at the top
+      - pattern: "^(?!#[^\n]+\\n\\n[^#]+<rule>)"
+        message: "Rule files must begin with a '#' heading followed by a description paragraph before the <rule> tag."
+
+      # Reject rules that don't specify their category in the description
+      - pattern: "<rule>[\\s\\S]*?description:[\\s]+([^\n]+)"
+        validate: |
+          const categoryTerms = {
+            architecture: ['architecture', 'layer', 'dependency'],
+            workflow: ['workflow', 'process', 'documentation', 'testing', 'tdd'],
+            patterns: ['pattern', 'naming', 'implementation'],
+            project: ['project', 'configuration', 'protocol', 'ports'],
+            meta: ['meta', 'rule', 'cursor']
+          };
+          
+          const description = capture[1].toLowerCase();
+          const dirMatch = file.path.match(/\.cursor\/rules\/([^\/]+)\//);
+          
+          if (!dirMatch) {
+            return "Rule must be in a category directory.";
+          }
+          
+          const category = dirMatch[1];
+          const relevantTerms = categoryTerms[category] || [];
+          
+          // Check if any relevant term is in the description
+          if (relevantTerms.some(term => description.includes(term))) {
+            return true;
+          }
+          
+          return `Rule description should include terms relevant to its category (${category}).`;
+
+  - type: suggest
+    message: |
+      Rule Classification Best Practices:
+
+      1. Directory Structure:
+         Rules must be placed in one of the following directories based on their purpose:
+         - architecture/ - Rules related to architectural principles, layers, and dependencies
+         - workflow/ - Rules related to development processes, testing, and documentation
+         - patterns/ - Rules related to coding patterns, naming conventions, and implementations
+         - project/ - Rules related to project configuration, execution, and technical setup
+         - meta/ - Rules about rules, including format standards and rule organization
+
+      2. Rule File Format:
+         Each rule file should:
+         - Begin with a meaningful title (# Title)
+         - Include a description paragraph
+         - Use the standard <rule> tag format
+         - Include a descriptive name with the appropriate suffix (_rule)
+         - Have a description that reflects its category
+
+      3. Categories Explained:
+         - Architecture Rules: Enforce separation of concerns, layer boundaries, and dependency flow
+         - Workflow Rules: Standardize development processes like TDD and documentation practices
+         - Pattern Rules: Enforce coding patterns, naming conventions, and implementation standards
+         - Project Rules: Manage project configuration, execution, and environment setup
+         - Meta Rules: Define standards for rules themselves, including format and organization
+
+      4. Example Rule Structure:
+         ```
+         # Rule Title
+         
+         Brief description explaining what this rule does and which category it belongs to.
+         
+         <rule>
+         name: descriptive_rule_name
+         description: Category-relevant description that clearly states the rule's purpose
+         ...
+         </rule>
+         ```
+
+examples:
+  - input: |
+      <rule>
+      name: some_unclassified_rule
+      description: Enforces some standard
+      filters:
+        - type: file_extension
+          pattern: "\\.ts$"
+      </rule>
+
+    output: |
+      # Architecture Standard Rule
+      
+      This rule enforces architectural standards related to layer separation.
+      
+      <rule>
+      name: architecture_standard_rule
+      description: Enforces architectural standards related to layer separation
+      filters:
+        - type: file_extension
+          pattern: "\\.ts$"
+      </rule>
+
+  - input: |
+      # Poorly Named Rule
+      
+      <rule>
+      name: my_rule
+      description: Does something
+      </rule>
+
+    output: |
+      # Testing Workflow Rule
+      
+      This rule standardizes testing practices within the development workflow.
+      
+      <rule>
+      name: testing_workflow_rule
+      description: Standardizes testing practices within the development workflow
+      filters:
+        - type: file_extension
+          pattern: "\\.ts$"
+        - type: directory
+          pattern: "test/"
+      </rule>
+
+metadata:
+  priority: high
+  version: 1.0
+</rule> 

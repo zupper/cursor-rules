@@ -1,0 +1,143 @@
+---
+description: Technical Documentation Rule
+globs: "docs/technical/**/*.md"
+alwaysApply: true
+---
+# Technical Documentation Rule
+
+This rule defines standards for technical documentation, ensuring that it covers important architectural and implementation aspects without going into excessive detail.
+
+<rule>
+name: technical_documentation_rule
+description: Enforces clear, concise technical documentation standards
+filters:
+  - type: file_extension
+    pattern: "\\.md$"
+  - type: directory
+    pattern: "docs/technical"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject business-only descriptions without technical context
+      - pattern: "(?:section|chapter|paragraph).*?(?:without|no).*?(?:technical|implementation|architecture)"
+        message: "Technical documentation should include appropriate technical details and context."
+        
+      # Reject excessive code examples (more than 30 lines) - recommend linking instead
+      - pattern: "```(?:typescript|javascript|ts|js)[\\s\\S]{1500,}```"
+        message: "Avoid excessively long code blocks in technical documentation. Consider linking to the actual source files or showing only key excerpts."
+
+  - type: suggest
+    message: |
+      Technical Documentation Best Practices:
+
+      1. Structure:
+         - Start with a high-level architecture overview
+         - Use diagrams for complex systems/flows
+         - Organize by component or pattern
+         - Include clear section headings
+         - Link to source code for implementation details
+
+      2. Content Focus:
+         - Architectural decisions and patterns
+         - Component interactions and interfaces
+         - Event flows and data models
+         - Key technical constraints
+         - Important implementation details (without exhaustive code)
+
+      3. Code Examples:
+         - Use short, focused code examples
+         - Include only the most relevant code
+         - Annotate complex sections
+         - Focus on interfaces over implementations
+         - Use TypeScript for all code examples
+
+      4. Example Format:
+         ```markdown
+         # Technical Component/Pattern Name
+
+         ## Overview
+         Brief technical description and purpose. Explain where this fits in the overall architecture.
+
+         ## Architecture
+         - High-level design description
+         - Key components and their relationships
+         - Design patterns used
+
+         ## Key Interfaces
+         ```typescript
+         // Show interface definitions, not full implementations
+         export interface KeyInterface {
+           // Add comments explaining important properties
+           propertyName: PropertyType;
+         }
+         ```
+
+         ## Flow
+         Describe how data/control flows through this component.
+
+         ## Implementation Notes
+         Important details that affect how the component works.
+         ```
+
+examples:
+  - input: |
+      # Product Animation
+      
+      Users can click on the product to see more details.
+      The product is an engaging element that draws user attention.
+
+    output: |
+      # Product Animation System
+
+      ## Overview
+      The product animation system uses requestAnimationFrame for smooth animations and 
+      implements three distinct visual states with transitions between them.
+
+      ## Architecture
+      - Animation loop using requestAnimationFrame
+      - CSS transform-based transitions for performance
+      - State management for different visual states
+      - Event-driven state transitions
+
+      ## Animation States
+      1. Normal: Default display state
+      2. Active: Enhanced visuals when hovered
+      3. Highlight: Special effect briefly after interaction
+
+  - input: |
+      Here's the full implementation:
+      ```typescript
+      // 200 lines of complete implementation code
+      export class ProductView {
+        // Dozens of methods and properties
+        // Extensive state management logic
+        // Event handling code
+        // Animation setup
+        // All private helpers
+      }
+      ```
+
+    output: |
+      ## Implementation Approach
+      
+      The product animation is implemented using a state machine pattern with the following key components:
+
+      ```typescript
+      // Key animation state properties
+      #displayState: number = 0;
+      #transitionSpeed: number = 120; // milliseconds
+      #isActive: boolean = true;
+      
+      // Animation frame handling
+      startTransition(): void {
+        // RequestAnimationFrame implementation
+      }
+      ```
+      
+      See the full implementation in `frontend/src/view/product/ProductView.ts`.
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

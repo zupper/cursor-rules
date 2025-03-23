@@ -1,0 +1,146 @@
+---
+description: Application Layer Dependency Injection Rule
+globs: **/src/CompositionRoot.ts
+alwaysApply: true
+---
+# Application Layer Dependency Injection Rule
+
+This rule enforces proper dependency injection for the application layer, while allowing other layers to use direct imports.
+
+<rule>
+name: application_layer_di_rule
+description: Enforces dependency injection for the application layer only
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?s).*export\\s+function\\s+createApp.*"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject hardcoded external dependencies in App construction
+      - pattern: "new\\s+App\\((?![^)]*?(?:interface|Service|Repository|Client))"
+        message: "App should receive interfaces as dependencies, not concrete implementations."
+        
+  - type: suggest
+    message: |
+      Application Layer Dependency Injection Best Practices:
+
+      1. Composition Root pattern:
+         ```typescript
+         // CompositionRoot.ts - single place where all dependencies are resolved
+         export function createApp(): App {
+           // Infrastructure layer implementations
+           const httpClient = new FetchHttpClient(backendUrl);
+           const wsClient = new WebSocketClient(backendUrl);
+           const storageClient = new LocalStorageClient();
+           
+           // Repository implementations
+           const userRepository = new HttpUserRepository(httpClient);
+           const productRepository = new HttpProductRepository(httpClient);
+           
+           // Service implementations
+           const orderProcessingService = new RealTimeOrderProcessingService({
+             wsClient,
+             productRepository
+           });
+           
+           const userService = new DefaultUserService({
+             userRepository,
+             storageClient
+           });
+           
+           // Inject interfaces to App (not implementations)
+           const app = new App({
+             orderProcessingService,
+             userService
+           });
+           
+           // View layer receives the App instance
+           new MainView(app);
+           
+           return app;
+         }
+         ```
+
+      2. Composition Root Principles:
+         - Single location for wiring up the entire application
+         - App and other components depend on interfaces, not concrete implementations
+         - Dependencies flow in one direction, from infrastructure to application
+         - All concrete implementations are instantiated in the composition root
+         - No service locators or dependency containers should be used
+
+examples:
+  - input: |
+      // Bad: Direct implementation dependency scattered across multiple files
+      // In AppFactory.ts
+      export function createApp(): App {
+        const app = new App(new FetchHttpClient(), new WebSocketClient());
+        return app;
+      }
+      
+      // In ProductService.ts
+      const productRepo = new HttpProductRepository();
+
+    output: |
+      // Good: Composition Root with all dependencies in one place
+      // CompositionRoot.ts
+      export function createApp(): App {
+        // Infrastructure implementations
+        const httpClient = new FetchHttpClient();
+        const wsClient = new WebSocketClient();
+        
+        // Repository implementations
+        const productRepository = new HttpProductRepository(httpClient);
+        
+        // Service implementations
+        const orderProcessingService = new RealTimeOrderProcessingService({
+          wsClient,
+          productRepository
+        });
+        
+        // App depends on interfaces
+        const app = new App({
+          orderProcessingService
+        });
+        
+        return app;
+      }
+
+  - input: |
+      // Bad: No dependency injection
+      export function createApp(): App {
+        const app = new App();
+        app.init();
+        return app;
+      }
+
+    output: |
+      // Good: Proper dependency injection with composition root
+      export function createApp(): App {
+        // Create infrastructure implementations
+        const httpClient = new FetchHttpClient('https://api.example.com');
+        const wsClient = new WebSocketClient('wss://api.example.com');
+        
+        // Create service implementations
+        const orderProcessingService = new RealTimeOrderProcessingService({
+          wsClient,
+          httpClient
+        });
+        
+        const notificationService = new WebNotificationService();
+        
+        // App depends on interfaces through object parameter
+        const app = new App({
+          orderProcessingService,
+          notificationService
+        });
+        
+        return app;
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

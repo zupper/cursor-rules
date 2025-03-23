@@ -1,0 +1,209 @@
+# Application Layer Architecture Rule
+
+This rule enforces proper architecture principles for the application layer, ensuring it remains free of technical implementation details while using proper dependency inversion and injection.
+
+<rule>
+name: application_layer_architecture_rule
+description: Enforces pure business logic and proper dependency practices in the application layer
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: directory
+    pattern: "src/application"
+  - type: content
+    pattern: "(?s)class|interface|type"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject direct imports from other layers (from dependency_rule)
+      - pattern: "import.*from.*['\"]\\.\\./(?!application).*['\"]"
+        message: "Application layer must not import from other layers. Use dependency injection and interfaces instead."
+
+      # Reject concrete implementations in constructor parameters (from dependency_rule)
+      - pattern: "constructor\\([^)]*\\b(?:RealTimeOrderService|SocketIoClient|FetchHttpClient)\\b[^)]*\\)"
+        message: "Constructor parameters must use interfaces, not concrete implementations."
+
+      # Reject DOM API usage (from pure_rule)
+      - pattern: "(?:document|window|navigator|localStorage|sessionStorage|querySelector|getElementById|createElement|innerHTML|textContent|appendChild|removeChild|addEventListener|dispatchEvent|removeEventListener)"
+        message: "DOM manipulation is not allowed in the application layer. Move this logic to the view layer."
+
+      # Reject browser-specific APIs (from pure_rule)
+      - pattern: "(?:setTimeout|setInterval|clearTimeout|clearInterval|requestAnimationFrame|cancelAnimationFrame|fetch|XMLHttpRequest|WebSocket)"
+        message: "Browser-specific APIs should not be used directly in the application layer. Use interfaces for these capabilities if needed."
+
+      # Reject alert-style dialogs (from pure_rule)
+      - pattern: "(?:alert|confirm|prompt)"
+        message: "Browser dialogs are not allowed in the application layer. Use events or callbacks for communication."
+
+      # Reject style manipulation (from pure_rule)
+      - pattern: "(?:style\\.|classList\\.|className|setAttribute\\(['\"]style['\")|cssText)"
+        message: "Style manipulation is not allowed in the application layer. Handle styling in the view layer."
+
+  - type: suggest
+    message: |
+      # Application Layer Architecture Best Practices
+
+      ## 1. Dependency Management:
+
+      - Use interfaces for all dependencies:
+        ```typescript
+        // Good
+        constructor(private readonly deps: {
+          orderService: OrderService;
+          eventEmitter: EventEmitter;
+        }) {}
+
+        // Bad
+        constructor(private readonly orderService: RealTimeOrderService) {}
+        ```
+
+      - Define interfaces in the application layer:
+        ```typescript
+        // Good: Interface in application layer
+        export interface OrderService {
+          checkOrderStatus(): Promise<void>;
+          onOrderStatusChange(handler: (result: OrderResult) => void): void;
+        }
+        ```
+
+      - Use dependency injection:
+        ```typescript
+        // Good: Dependencies injected via constructor
+        export class App {
+          constructor(
+            private readonly deps: {
+              orderService: OrderService;
+              eventEmitter: EventEmitter;
+            }
+          ) {}
+        }
+
+        // Bad: Creating dependencies inside the class
+        export class App {
+          private readonly orderService = new RealTimeOrderService();
+        }
+        ```
+
+      ## 2. Layer Purity:
+
+      - No direct access to external services:
+        ```typescript
+        // Bad: DOM manipulation in application layer
+        export class App {
+          showHighlightAnimation(): void {
+            const element = document.querySelector('.highlight-element');
+            element.classList.add('visible');
+          }
+        }
+
+        // Good: Use events for view communication
+        export class App {
+          handleSuccess(): void {
+            this.#events.emit('product:displayResult', { 
+              isHighlighted: true, 
+              discount: 0.5 
+            });
+          }
+        }
+        ```
+
+      - Never use these directly:
+        - No direct HTTP calls
+        - No direct WebSocket connections
+        - No direct DOM manipulation
+        - No direct storage access
+        - No direct external service calls
+
+      ## 3. Communication Patterns:
+
+      - Use events for view layer communication:
+        ```typescript
+        // Good: Event-based communication
+        export class App {
+          handleError(message: string): void {
+            this.#events.emit('error', { 
+              message, 
+              severity: 'error' 
+            });
+          }
+        }
+        ```
+
+examples:
+  - input: |
+      // Bad: Direct import from infrastructure with technical implementation
+      import { RealTimeOrderService } from '../infrastructure/order/order-service';
+      
+      export class App {
+        private readonly orderService = new RealTimeOrderService();
+        
+        showError(message: string): void {
+          const errorElement = document.createElement('div');
+          errorElement.className = 'error';
+          errorElement.textContent = message;
+          document.body.appendChild(errorElement);
+        }
+      }
+
+    output: |
+      // Good: Using interfaces, dependency injection, and events
+      import { OrderService, EventEmitter } from './types';
+      
+      export class App {
+        constructor(
+          private readonly deps: {
+            orderService: OrderService;
+            events: EventEmitter;
+          }
+        ) {}
+        
+        handleError(message: string): void {
+          this.deps.events.emit('error', { 
+            message, 
+            severity: 'error' 
+          });
+        }
+      }
+
+  - input: |
+      // Bad: Direct WebSocket usage and browser APIs
+      import { SocketIoClient } from '../infrastructure/websocket/websocket-client';
+      
+      export class OrderManager {
+        private readonly wsClient = new SocketIoClient();
+        
+        init(): void {
+          localStorage.setItem('orderInitialized', 'true');
+          setTimeout(() => {
+            this.wsClient.send('order:check');
+          }, 1000);
+        }
+      }
+
+    output: |
+      // Good: Using interfaces and dependency injection
+      import { WebSocketClient, StorageService, TimerService } from './types';
+      
+      export class OrderManager {
+        constructor(
+          private readonly deps: {
+            wsClient: WebSocketClient;
+            storage: StorageService;
+            timer: TimerService;
+          }
+        ) {}
+        
+        init(): void {
+          this.deps.storage.set('orderInitialized', 'true');
+          this.deps.timer.setTimeout(() => {
+            this.deps.wsClient.send('order:check');
+          }, 1000);
+        }
+      }
+
+metadata:
+  priority: high
+  version: 2.0
+  replaces: ["pure_application_layer_rule", "application_layer_dependency_rule"]
+</rule> 

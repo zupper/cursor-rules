@@ -1,0 +1,113 @@
+---
+description: Domain Event Naming Rule
+globs: **/src/**/*.ts
+alwaysApply: true
+---
+# Domain Event Naming Rule
+
+This rule ensures consistent naming of domain events and appropriate event emission in the application layer.
+
+<rule>
+name: domain_event_naming_rule
+description: Enforces consistent naming of domain events
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?s).*this\\.(#events|app)\\.(emit|on(?:Event)?)\\(.*"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject UI-specific events in App layer
+      - pattern: "this\\.#events\\.emit\\(['\"](mdc:?:show|hide|animate|display|render|style|css|color|animation)[^'\"]*['\"]"
+        message: "Application layer should emit domain events, not UI implementation details."
+        validate: |
+          if (!file.path.includes('src/application/')) {
+            return true;
+          }
+          return "App layer should emit domain events that describe business processes, not UI implementation details.";
+
+  - type: suggest
+    message: |
+      Domain Event Best Practices:
+
+      1. Domain Events (emitted by App layer):
+         ```typescript
+         // Good: App emitting domain events
+         export class App {
+           handleEmailSubmit(email: string): void {
+             if (this.#isValidEmail(email)) {
+               this.#events.emit('email:submitted', { email });
+             } else {
+               this.#events.emit('email:validationFailed');
+             }
+           }
+         }
+         ```
+
+      2. Domain Event Naming:
+         - Should reflect business concepts
+         - Format: `entity:action` or `process:outcome`
+         - Examples: `product:displayResult`, `email:submitted`, `email:validationFailed`
+
+      3. View Components:
+         - Can directly listen to domain events
+         - Should focus on translating domain events to UI changes
+         ```typescript
+         // Good: View component responding to domain events
+         export class ProductView {
+           #setupEventListeners(): void {
+             this.app.onEvent('product:displayResult', (result) => {
+               if (result.isHighlighted) {
+                 this.showHighlightAnimation();
+               }
+             });
+           }
+         }
+         ```
+
+examples:
+  - input: |
+      // Bad: App emitting UI-specific events
+      export class App {
+        handleSuccess(): void {
+          this.#events.emit('showConfetti');
+          this.#events.emit('displaySuccessText');
+        }
+      }
+
+    output: |
+      // Good: App emitting domain events
+      export class App {
+        handleSuccess(): void {
+          this.#events.emit('product:displayResult', {
+            isHighlighted: true,
+            discount: 0.5
+          });
+        }
+      }
+
+  - input: |
+      // Bad: Unclear event naming
+      export class App {
+        processUserAction(): void {
+          this.#events.emit('success');
+        }
+      }
+
+    output: |
+      // Good: Clear domain event naming
+      export class App {
+        processUserAction(): void {
+          this.#events.emit('userAction:processed', {
+            success: true,
+            timestamp: Date.now()
+          });
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

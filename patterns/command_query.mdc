@@ -1,0 +1,225 @@
+---
+description: Command and Query Pattern Rule
+globs: "**/src/application/**/*.ts"
+alwaysApply: true
+---
+# Command and Query Pattern Rule
+
+This rule enforces the proper implementation and usage of the Command and Query patterns in the application layer.
+
+<rule>
+name: command_query_pattern_rule
+description: Enforces proper Command and Query pattern implementation
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: directory
+    pattern: "src/application"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject Command implementations that don't match the interface
+      - pattern: "class\\s+\\w+Command(?!.*?implements Command<)"
+        message: "Command classes must implement the Command<P, R> interface."
+        
+      # Reject Query implementations that don't match the interface
+      - pattern: "class\\s+\\w+Query(?!.*?implements Query<)"
+        message: "Query classes must implement the Query<P, T> interface."
+        
+      # Reject Command Bus implementations
+      - pattern: "(?:CommandBus|CommandHandler|CommandDispatcher|EventBus)"
+        message: "Commands should be executed directly by controllers. Do not use command buses or handlers."
+        
+      # Reject improper Command/Query mixing
+      - pattern: "class\\s+\\w+Command.*?(?:get|fetch|retrieve|find|query)"
+        message: "Commands should change state, queries should retrieve data. Do not mix these concerns."
+        
+      # Reject constructors with multiple parameters instead of a single object
+      - pattern: "constructor\\s*\\((?:[^,)]*,\\s*[^,)]*)"
+        message: "Constructor parameters must be provided as a single object for dependencies."
+        
+      # Reject missing inline type definitions for constructor parameters
+      - pattern: "constructor\\s*\\(\\s*(?:private|protected|public|readonly)\\s+\\w+\\s*:\\s*(?!\\{)\\w+"
+        message: "Constructor parameter types must be defined inline in the relevant file, not imported."
+
+  - type: suggest
+    message: |
+      Command and Query Pattern Best Practices:
+
+      1. Command Structure:
+         - Commands should modify state (create, update, delete)
+         - Command names should be imperative (Create*, Update*, Delete*)
+         - Return type can be void or { data?, events? }
+         - Every command should have a single responsibility
+
+      2. Query Structure:
+         - Queries should only retrieve data, never modify state
+         - Query names should be descriptive of what they retrieve (Get*, Find*)
+         - Return type should be the exact data structure needed by the controller
+         - Queries should be optimized for the specific view they support
+
+      3. Implementation:
+         - Both commands and queries should be executed directly by controllers
+         - Input and output types should be inlined with the command/query
+         - Use dependency injection for external dependencies
+         - Keep business logic in the command/query, not in the controller
+
+      4. Constructor Pattern:
+         - Constructor parameters must be provided as a single object
+         - The type for the constructor parameter object must be defined inline
+         - Use destructuring to extract dependencies from the object
+
+      5. Example Patterns:
+         ```typescript
+         // Command Example with object constructor parameters
+         export class CreateUserCommand implements Command<CreateUserParams, { data: User; events: UserEvent[] }> {
+           constructor(private readonly deps: { 
+             userRepository: { 
+               save: (user: User) => Promise<User>;
+               findById: (id: string) => Promise<User | null>; 
+             } 
+           }) {}
+           
+           async run(params: CreateUserParams): Promise<{ data: User; events: UserEvent[] }> {
+             // Implementation with business logic
+             const { userRepository } = this.deps;
+             const newUser = await userRepository.save(/* user data */);
+             return { data: newUser, events: [{ type: 'USER_CREATED', payload: newUser }] };
+           }
+         }
+         
+         // Query Example with object constructor parameters
+         export class GetUserByIdQuery implements Query<{ id: string }, User> {
+           constructor(private readonly deps: {
+             userRepository: {
+               findById: (id: string) => Promise<User | null>;
+             }
+           }) {}
+           
+           async run(params: { id: string }): Promise<User> {
+             // Implementation with retrieval logic
+             const { userRepository } = this.deps;
+             const user = await userRepository.findById(params.id);
+             if (!user) throw new Error('User not found');
+             return user;
+           }
+         }
+         ```
+
+examples:
+  - input: |
+      // Multiple constructor parameters not as object
+      export class CreateUserCommand implements Command<CreateUserDto, void> {
+        constructor(
+          private readonly userRepo: UserRepository,
+          private readonly eventBus: EventBus,
+          private readonly logger: Logger
+        ) {}
+        
+        async run(params: CreateUserDto): Promise<void> {
+          const user = new User(params);
+          await this.userRepo.save(user);
+        }
+      }
+
+    output: |
+      // Constructor parameters as a single object with inline types
+      export class CreateUserCommand implements Command<CreateUserDto, void> {
+        constructor(private readonly deps: {
+          userRepo: {
+            save: (user: User) => Promise<User>;
+          };
+          eventBus: {
+            emit: (event: string, payload: any) => void;
+          };
+          logger: {
+            log: (message: string) => void;
+          };
+        }) {}
+        
+        async run(params: CreateUserDto): Promise<void> {
+          const { userRepo, eventBus, logger } = this.deps;
+          const user = new User(params);
+          await userRepo.save(user);
+          eventBus.emit('user:created', { id: user.id });
+          logger.log(`User created: ${user.id}`);
+        }
+      }
+
+  - input: |
+      // Command that also fetches data
+      export class CreateUserAndGetAllCommand {
+        constructor(private readonly userRepo: UserRepository) {}
+        
+        async execute(data: CreateUserDto) {
+          await this.userRepo.save(new User(data));
+          return this.userRepo.findAll(); // Mixing command and query
+        }
+      }
+
+    output: |
+      // Separate command and query with object parameters
+      export class CreateUserCommand implements Command<CreateUserDto, { data: User; events: UserEvent[] }> {
+        constructor(private readonly deps: {
+          userRepo: {
+            save: (user: User) => Promise<User>;
+          };
+        }) {}
+        
+        async run(params: CreateUserDto): Promise<{ data: User; events: UserEvent[] }> {
+          const { userRepo } = this.deps;
+          const user = new User(params);
+          await userRepo.save(user);
+          return { 
+            data: user, 
+            events: [{ type: 'USER_CREATED', payload: user }]
+          };
+        }
+      }
+      
+      // Separate query for retrieval
+      export class GetAllUsersQuery implements Query<void, User[]> {
+        constructor(private readonly deps: {
+          userRepo: {
+            findAll: () => Promise<User[]>;
+          };
+        }) {}
+        
+        async run(): Promise<User[]> {
+          const { userRepo } = this.deps;
+          return userRepo.findAll();
+        }
+      }
+
+  - input: |
+      // Using a command bus
+      export class UserController {
+        constructor(private readonly commandBus: CommandBus) {}
+        
+        @Post()
+        async createUser(@Body() dto: CreateUserDto) {
+          return this.commandBus.dispatch(new CreateUserCommand(dto));
+        }
+      }
+
+    output: |
+      // Direct command execution with proper object dependencies
+      export class UserController {
+        constructor(private readonly deps: {
+          createUserCommand: {
+            run: (params: CreateUserDto) => Promise<{ data: User; events: UserEvent[] }>;
+          };
+        }) {}
+        
+        @Post()
+        async createUser(@Body() dto: CreateUserDto) {
+          const { createUserCommand } = this.deps;
+          return createUserCommand.run(dto);
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

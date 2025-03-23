@@ -1,0 +1,99 @@
+---
+description: Implementation Naming Rule
+globs: **/src/**/*.ts
+alwaysApply: true
+---
+# Implementation Naming Rule
+
+This rule enforces that concrete implementations of interfaces should include the technology or framework used in their name.
+
+<rule>
+name: implementation_naming_rule
+description: Enforces implementation naming to include technology used
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?s)class\\s+\\w+\\s+implements\\s+\\w+"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject implementations that don't include technology in their name
+      - pattern: "export\\s+class\\s+([A-Za-z]+)\\s+implements\\s+([A-Za-z]+)"
+        message: "Implementation classes must include the technology used in their name. For example: FetchHttpClient implements HttpClient"
+        capture: [1, 2]
+        validate: |
+          const [implementation, interface] = capture;
+          // Skip if implementation already includes technology (e.g., Fetch, Axios, SQL, etc.)
+          if (implementation.match(/(?:Fetch|Axios|SQL|Sequelize|Mongo|Redis|Postgres|MySQL|SocketIO|WebSocket|LocalStorage|IndexedDB|Firebase|Supabase|Prisma)/)) {
+            return true;
+          }
+          // Skip if implementation is in the application layer (domain implementations)
+          if (file.path.includes('/application/')) {
+            return true;
+          }
+          return `Implementation class '${implementation}' should include the technology used. For example: FetchHttpClient, AxiosHttpClient, SQLUserRepository, etc.`;
+
+  - type: suggest
+    message: |
+      When naming implementation classes:
+
+      1. Include the technology/framework used:
+         ```typescript
+         // Good
+         export class FetchHttpClient implements HttpClient { ... }
+         export class AxiosHttpClient implements HttpClient { ... }
+         export class SQLUserRepository implements UserRepository { ... }
+         export class SocketIOClient implements WebSocketClient { ... }
+
+         // Bad
+         export class HttpClient implements HttpClient { ... }
+         export class UserRepository implements UserRepository { ... }
+         export class WebSocketClient implements WebSocketClient { ... }
+         ```
+
+      2. Common technology prefixes:
+         - HTTP Clients: Fetch, Axios, Got, etc.
+         - Databases: SQL, MongoDB, Redis, etc.
+         - ORMs: Sequelize, Prisma, TypeORM, etc.
+         - WebSocket: SocketIO, WebSocket, etc.
+         - Storage: LocalStorage, IndexedDB, etc.
+         - Backend Services: Firebase, Supabase, etc.
+
+      3. Domain implementations in application layer are exempt:
+         ```typescript
+         // Good (in application layer)
+         export class UserService implements IUserService { ... }
+         export class OrderProcessor implements IOrderProcessor { ... }
+         ```
+
+examples:
+  - input: |
+      // Bad: Missing technology in name
+      export class HttpClient implements HttpClient {
+        constructor(private readonly baseUrl: string) {}
+      }
+
+    output: |
+      // Good: Includes technology used
+      export class FetchHttpClient implements HttpClient {
+        constructor(private readonly baseUrl: string) {}
+      }
+
+  - input: |
+      // Bad: Generic name
+      export class UserRepository implements IUserRepository {
+        constructor(private readonly db: Database) {}
+      }
+
+    output: |
+      // Good: Specific technology
+      export class SQLUserRepository implements IUserRepository {
+        constructor(private readonly db: Database) {}
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule> 

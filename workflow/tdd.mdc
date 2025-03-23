@@ -1,0 +1,343 @@
+---
+description: API Unit Testing Rule
+globs: "**/test/**/*.ts"
+alwaysApply: true
+---
+# API Unit Testing Rule
+
+This rule enforces test-driven development standards with a focus on small, incremental tests that verify specific behaviors through dependency injection.
+
+<rule>
+name: api_unit_testing_rule
+description: Enforces TDD practices for API testing
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: directory
+    pattern: "test/"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject tests targeting infrastructure code directly
+      - pattern: "import\\s+.*?(?:from\\s+['\"].*?/src/infrastructure/)"
+        message: "Only test the application layer. Do not import or test infrastructure code directly."
+        
+      # Reject excessive use of mocking libraries
+      - pattern: "(?:mock|stub|spy|fake)\\([^)]*\\).*?(?:mock|stub|spy|fake)\\([^)]*\\).*?(?:mock|stub|spy|fake)\\([^)]*\\)"
+        message: "Minimize the use of mocks. Use dependency injection to replace external dependencies with simpler implementations."
+        
+      # Reject tests outside the test directory
+      - pattern: "describe\\(.*?\\)|test\\(.*?\\)|it\\(.*?\\)"
+        validate: |
+          if (!file.path.includes('/test/')) {
+            return "Tests should be in the test/ directory, not src/.";
+          }
+          return true;
+          
+      # Reject tests with too many assertions
+      - pattern: "expect\\(.*?\\).*expect\\(.*?\\).*expect\\(.*?\\)"
+        message: "Tests should have at most 1-2 expect statements for focused verification. Split this test into smaller tests."
+        
+      # Reject excessive comments
+      - pattern: "(?:/\\*\\*[\\s\\S]*?\\*/).*?(?:/\\*\\*[\\s\\S]*?\\*/)"
+        message: "Minimize comments in tests. Well-structured tests with descriptive names should be self-documenting."
+        
+      # Reject pre-declared interfaces in tests
+      - pattern: "export\\s+interface\\s+"
+        message: "Do not pre-declare interfaces in tests. Create specific, concrete fake implementations directly in the test."
+
+  - type: suggest
+    message: |
+      Test-Driven Development Best Practices:
+
+      1. Test Process:
+         - ALWAYS write a failing test first (red)
+         - Implement minimal code to make the test pass (green)
+         - Refactor the code for cleanliness, keeping tests green
+         - Run tests after EVERY code change
+         - Stop at the first potential failure - fix it before adding more tests
+         - Treat compilation errors as failures
+         - Start with error edge cases before success cases
+
+      2. Test Structure:
+         - Write tests before implementation (Red-Green-Refactor)
+         - Each test should have at most 1-2 expect statements
+         - Group related tests under descriptive describe blocks
+         - Use clear, behavior-describing test names
+         - Minimize comments - tests should be self-documenting
+
+      3. Test Dependencies:
+         - Use dependency injection to supply external dependencies
+         - Create simple fake implementations rather than complex mocks
+         - Inject fake implementations through constructor parameters
+         - Track state in variables rather than using assertion mocks
+         - Don't pre-declare interfaces in the test
+
+      4. Test Focus:
+         - Only test the application layer
+         - Each test should focus on a single behavior or outcome
+         - Test public interfaces, not implementation details
+         - Make small, incremental test steps
+
+      5. Test Clarity:
+         - Let the code speak for itself with descriptive variable and test names
+         - Avoid redundant comments that repeat what the code already says
+         - Use simple, consistent test structure instead of verbose explanations
+         - Only use comments when absolutely necessary to explain complex setup
+
+      6. TDD Workflow:
+         - Start with the smallest possible failing test
+         - Implement only what's needed to pass that test
+         - Write tests for error cases BEFORE success cases
+         - Start with rejection/validation tests
+         - Build positive tests only after error handling is in place
+         - Never skip the "red" phase - see the test fail first
+
+      7. Example Test Structure:
+         ```typescript
+         describe('SomeService', () => {
+           const fakeDependency = {
+             method: () => expectedValue
+           };
+           
+           const service = new SomeService(fakeDependency);
+           
+           it('should return expected value', async () => {
+             const result = await service.method(input);
+             
+             expect(result).toEqual(expectedOutput);
+           });
+           
+           it('should handle input correctly', async () => {
+             const calls: any[] = [];
+             const trackingDependency = {
+               method: (arg: any) => {
+                 calls.push(arg);
+                 return expectedValue;
+               }
+             };
+             
+             const trackingService = new SomeService(trackingDependency);
+             
+             await trackingService.method(input);
+             
+             expect(calls[0]).toEqual(expectedInput);
+           });
+         });
+         ```
+
+examples:
+  - input: |
+      // src/application/UserService.test.ts
+      // This is a test for the UserService class that verifies fetching users
+      // The tests mock the HTTP client to avoid actual network calls
+      import { UserService } from '../application/UserService';
+      import { HttpClient } from '../infrastructure/HttpClient';
+
+      jest.mock('../infrastructure/HttpClient');
+
+      describe('UserService', () => {
+        // Create the mocked HTTP client and service instance
+        let httpClient: HttpClient;
+        let userService: UserService;
+        
+        beforeEach(() => {
+          // Set up a new HTTP client for each test
+          httpClient = new HttpClient();
+          // Mock the get method to return sample data
+          (httpClient.get as jest.Mock).mockImplementation(() => Promise.resolve({ data: { id: 1 } }));
+          // Create a new service with the mocked client
+          userService = new UserService(httpClient);
+        });
+        
+        it('should get user by id', async () => {
+          // Call the service method
+          const user = await userService.getUserById(1);
+          // Verify the response
+          expect(user.id).toBe(1);
+          // Verify the HTTP client was called with the correct URL
+          expect(httpClient.get).toHaveBeenCalledWith('/users/1');
+        });
+      });
+
+    output: |
+      import { UserService } from '../../src/application/UserService';
+      
+      describe('UserService', () => {
+        // Start by testing error cases first
+        it('should throw when user not found', async () => {
+          const fakeHttpClient = {
+            get: async (url: string) => {
+              return { data: null };
+            }
+          };
+          
+          const userService = new UserService(fakeHttpClient);
+          
+          await expect(userService.getUserById(999)).rejects.toThrow('User not found');
+        });
+        
+        // After error handling, test success cases
+        it('should return user with correct id', async () => {
+          const fakeHttpClient = {
+            get: async (url: string) => {
+              if (url === '/users/1') {
+                return { data: { id: 1, name: 'User 1' } };
+              }
+              throw new Error('Not found');
+            }
+          };
+          
+          const userService = new UserService(fakeHttpClient);
+          const user = await userService.getUserById(1);
+          
+          expect(user.id).toBe(1);
+        });
+        
+        // One focused test per behavior
+        it('should request the correct URL', async () => {
+          const urlsCalled: string[] = [];
+          const trackingClient = {
+            get: async (url: string) => {
+              urlsCalled.push(url);
+              return { data: { id: 1, name: 'User 1' } };
+            }
+          };
+          const trackingService = new UserService(trackingClient);
+          
+          await trackingService.getUserById(1);
+          
+          expect(urlsCalled[0]).toBe('/users/1');
+        });
+      });
+
+  - input: |
+      import { mock } from 'jest-mock-extended';
+      import { Database, EventBus, Logger } from '../../src/infrastructure/types';
+      
+      /**
+       * Tests for the OrderService class
+       * These tests verify that the order processing logic works correctly
+       */
+      describe('OrderService', () => {
+        // Mock database for testing
+        const mockDB = mock<Database>();
+        // Mock event bus for testing
+        const mockEventBus = mock<EventBus>();
+        // Mock logger for testing
+        const mockLogger = mock<Logger>();
+        
+        // Set up mock return values
+        mockDB.query.mockReturnValue([{ id: 1, status: 'pending' }]);
+        mockEventBus.publish.mockResolvedValue(undefined);
+        mockLogger.log.mockReturnValue(undefined);
+        
+        // Create service with mocked dependencies
+        const service = new OrderService(mockDB, mockEventBus, mockLogger);
+        
+        test('processOrder should update status and emit event', async () => {
+          // Process an order
+          await service.processOrder(1);
+          // Verify database was updated
+          expect(mockDB.query).toHaveBeenCalledWith('UPDATE orders SET status = ?', ['completed']);
+          // Verify event was published
+          expect(mockEventBus.publish).toHaveBeenCalledWith('order:completed', { id: 1 });
+          // Verify logging occurred
+          expect(mockLogger.log).toHaveBeenCalled();
+        });
+      });
+
+    output: |
+      import { OrderService } from '../../src/application/OrderService';
+      
+      // Use a focused describe for the feature
+      describe('OrderService', () => {
+        // Start with error cases
+        describe('processOrder', () => {
+          it('should throw when order not found', async () => {
+            const testDb = {
+              query: async (sql: string, params: any[]) => {
+                return []; // No orders found
+              }
+            };
+            
+            const service = new OrderService({ 
+              db: testDb, 
+              eventBus: { publish: async () => {} } 
+            });
+            
+            await expect(service.processOrder(999)).rejects.toThrow('Order not found');
+          });
+          
+          // Then test success paths with one assertion per test
+          it('should return order with completed status', async () => {
+            const testOrders = [{ id: 1, status: 'pending' }];
+            
+            const testDb = {
+              query: async (sql: string, params: any[]) => {
+                if (sql.includes('UPDATE')) {
+                  testOrders[0].status = params[0];
+                  return [{ id: 1, status: params[0] }];
+                }
+                return testOrders;
+              }
+            };
+            
+            const service = new OrderService({ 
+              db: testDb, 
+              eventBus: { publish: async () => {} } 
+            });
+            
+            const result = await service.processOrder(1);
+            
+            expect(result.status).toBe('completed');
+          });
+          
+          it('should update order status in database', async () => {
+            const testOrders = [{ id: 1, status: 'pending' }];
+            
+            const testDb = {
+              query: async (sql: string, params: any[]) => {
+                if (sql.includes('UPDATE')) {
+                  testOrders[0].status = params[0];
+                  return [{ id: 1, status: params[0] }];
+                }
+                return testOrders;
+              }
+            };
+            
+            const service = new OrderService({ 
+              db: testDb, 
+              eventBus: { publish: async () => {} } 
+            });
+            
+            await service.processOrder(1);
+            
+            expect(testOrders[0].status).toBe('completed');
+          });
+          
+          it('should publish event with correct name', async () => {
+            const capturedEvents: Array<{ name: string, payload: any }> = [];
+            const testEventBus = {
+              publish: async (name: string, payload: any) => {
+                capturedEvents.push({ name, payload });
+              }
+            };
+            
+            const service = new OrderService({ 
+              db: { query: async () => [{ id: 1, status: 'pending' }] }, 
+              eventBus: testEventBus 
+            });
+            
+            await service.processOrder(1);
+            
+            expect(capturedEvents[0].name).toBe('order:completed');
+          });
+        });
+      });
+
+metadata:
+  priority: high
+  version: 1.2
+</rule>

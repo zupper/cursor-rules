@@ -1,0 +1,171 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+ # API Controller Rule
+
+This rule enforces the proper structure and responsibilities of API controllers, ensuring they serve as the integration point between HTTP/WebSocket infrastructure and the application layer.
+
+<rule>
+name: api_controller_rule
+description: Enforces proper separation between controllers and application logic
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: directory
+    pattern: "src/api/controllers"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject direct database or infrastructure dependencies
+      - pattern: "constructor\\(.*?(?:private|protected|readonly).*?(?:db|database|mongo|mysql|postgres|redis).*?:.*?\\)"
+        message: "Controllers should not directly depend on infrastructure components like databases. Use application layer commands/queries instead."
+        
+      # Reject direct socket.io server usage
+      - pattern: "constructor\\(.*?(?:private|protected|readonly).*?(?:io|socketServer|socket\\.io).*?:.*?\\)"
+        message: "Controllers should not directly depend on Socket.IO. Use WebSocketService interface instead."
+        
+      # Reject direct Express app usage
+      - pattern: "constructor\\(.*?(?:private|protected|readonly).*?(?:app|expressApp|application).*?:.*?\\)"
+        message: "Controllers should not directly depend on Express app. Routes should be exported separately."
+        
+      # Reject business logic in controllers
+      - pattern: "(?:calculateWinningChance|determineResult|processBusinessLogic|validateRules)"
+        message: "Controllers should not contain business logic. Move this to the application layer."
+
+  - type: suggest
+    message: |
+      Controller Best Practices:
+
+      1. Structure:
+         - Controllers should accept application layer services via dependency injection
+         - HTTP handlers should be bound to routes inside the controller
+         - Controllers should subscribe to the WebSocket events they want to handle and provide WebSocket handlers
+         - WebSocket handlers should process messages and delegate to application services
+
+      2. Responsibilities:
+         - Request parsing and validation
+         - Calling application layer commands/queries
+         - Response formatting and status codes
+         - WebSocket message handling
+         - Error handling and conversion to HTTP/WebSocket responses
+
+      3. Integration:
+         - Export router instance
+         - Register routes at application startup
+         - Subscribe to WebSocket events through service
+         - Return standard response formats
+
+      4. Example Pattern:
+         ```typescript
+         // Controller class
+           export class BoxController {
+            private router: Router;
+
+            constructor(private readonly deps: {
+              openBoxCommand: {
+                run: () => Promise<{
+                  data: { chance: number; isWinner: boolean };
+                  events: Array<{ type: string; payload: any }>
+                }>;
+              };
+              wsService: WebSocketService;
+            }) {
+              this.router = Router();
+              this.setupRoutes();
+              this.subscribeToEvents();
+            }
+
+            /**
+            * Returns the configured router for this controller
+            */
+            public getRouter(): Router {
+              return this.router;
+            }
+
+            /**
+            * Initialize routes for this controller
+            */
+            private setupRoutes(): void {
+              this.router.get('/open', this.handleBoxOpening.bind(this));
+            }
+
+            /**
+            * Subscribe to WebSocket events
+            */
+            private subscribeToEvents(): void {
+              this.deps.wsService.subscribeToMessageType(
+                WebSocketMessageType.BOX_OPEN,
+                this.handleWebSocketMessage.bind(this)
+              );
+            }
+
+            /**
+            * Handle HTTP request for box opening
+            */
+            private async handleBoxOpening(req: Request, res: Response): Promise<void> {}
+
+            /**
+            * Handle WebSocket message for box opening
+            * This would be called by the WebSocketService
+            */
+            public async handleWebSocketMessage(socketId: string, message: WebSocketMessage): Promise<void> {}
+         ```
+
+examples:
+  - input: |
+      // Bad: Controller with business logic
+      export class BoxController {
+        async openBox(req: Request, res: Response) {
+          const randomValue = Math.random();
+          const isWinner = randomValue > 0.5;
+          const result = {
+            chance: randomValue,
+            isWinner
+          };
+          
+          // Process win/loss logic here
+          if (isWinner) {
+            await this.processWinningLogic(req.user.id);
+          }
+          
+          res.json(result);
+        }
+        
+        private async processWinningLogic(userId: string) {
+          // Business logic here
+        }
+      }
+
+    output: |
+      // Good: Controller delegating to application command
+      export class BoxController {
+        constructor(
+          private readonly deps: {
+            openBoxCommand: OpenBoxCommand;
+            wsService: WebSocketService;
+          }
+        ) {}
+
+        async handleBoxOpening(req: Request, res: Response) {
+          const { data: result } = await this.deps.openBoxCommand.run();
+          res.json(result);
+        }
+        
+        async handleWebSocketMessage(socketId: string, message: WebSocketMessage) {
+          if (message.type === 'BOX_OPEN') {
+            const { data: result } = await this.deps.openBoxCommand.run();
+            this.deps.wsService.sendToClient(socketId, 'box:result', {
+              success: true,
+              data: { type: 'BOX_RESULT', payload: result }
+            });
+          }
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.1
+</rule>

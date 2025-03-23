@@ -1,0 +1,119 @@
+---
+description: View Layer Responsibility Rule
+globs: **/src/view/**/*.ts
+alwaysApply: true
+---
+# View Layer Responsibility Rule
+
+This rule ensures proper separation between application and view layers, while allowing views to directly respond to application events.
+
+<rule>
+name: view_layer_responsibility_rule
+description: Enforces proper separation between application and view layers
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: directory
+    pattern: "src/view"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject business logic in view components
+      - pattern: "(?:validate|isValid|calculate|compute|process)(?:User|Email|Data|Business|Domain)"
+        message: "Business logic should be in the application layer, not view components. Call methods on App instead."
+        
+      # Reject direct infrastructure access in view components
+      - pattern: "new (?:HttpClient|WebSocketClient|Storage|Database)"
+        message: "Views should not directly instantiate infrastructure components. Use App or its features instead."
+
+  - type: suggest
+    message: |
+      View Layer Best Practices:
+
+      1. View components:
+         ```typescript
+         // Good: View responding directly to domain events
+         #setupEventListeners(): void {
+           // It's fine to listen directly to domain events
+           this.app.onEvent('product:displayResult', (result) => {
+             if (result.isHighlighted) {
+               this.showHighlightAnimation();
+             }
+           });
+         }
+         ```
+
+      2. Focus of views:
+         - Handle DOM manipulation and rendering
+         - Listen to application events
+         - Call application methods for business operations
+         - Manage component-specific state
+
+      3. Responsibilities:
+         - Views: DOM manipulation, rendering, animations, user interaction
+         - App: Business logic, domain events, data processing
+
+examples:
+  - input: |
+      // Bad: Business logic in view
+      export class EmailPopupView {
+        #handleSubmit(): void {
+          const email = this.#emailInput.value;
+          if (email.includes('@') && email.includes('.')) {
+            // Process valid email
+            this.#storeEmail(email);
+          } else {
+            this.#showError('Invalid email');
+          }
+        }
+        
+        #storeEmail(email: string): void {
+          localStorage.setItem('userEmail', email);
+        }
+      }
+
+    output: |
+      // Good: Delegating to App
+      export class EmailPopupView {
+        #handleSubmit(): void {
+          const email = this.#emailInput.value;
+          this.app.handleEmailSubmit(email);
+        }
+        
+        #setupEventListeners(): void {
+          this.app.onEvent('email:validationFailed', () => {
+            this.#showError('Invalid email');
+          });
+          
+          this.app.onEvent('email:submitted', () => {
+            this.hide();
+          });
+        }
+      }
+
+  - input: |
+      // Bad: Infrastructure in view
+      export class DataView {
+        #loadData(): void {
+          const http = new HttpClient('https://api.example.com');
+          http.get('/data').then(data => {
+            this.#renderData(data);
+          });
+        }
+      }
+
+    output: |
+      // Good: Using app for data operations
+      export class DataView {
+        #loadData(): void {
+          this.app.loadData().then(data => {
+            this.#renderData(data);
+          });
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

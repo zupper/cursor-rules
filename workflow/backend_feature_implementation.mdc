@@ -1,0 +1,287 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+ # Backend Feature Implementation Rule
+
+This rule provides a comprehensive guide for implementing new backend features from the backlog, following test-driven development and clean architecture principles. It references and integrates several core rules to guide implementation.
+
+<rule>
+name: backend_feature_implementation
+description: Guides the implementation of backend features using TDD and clean architecture with reference to core rules
+filters:
+  - type: file_extension
+    pattern: "\\.(ts|js)$"
+  - type: directory
+    pattern: "src/(api|application|infrastructure)"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject implementation without tests - following @api_unit_testing_rule
+      - pattern: "(?s)export\\s+class\\s+\\w+(?!.*test\\.ts)"
+        message: "No implementation should be created without corresponding tests. Write tests first following TDD principles as specified in @api_unit_testing_rule.mdc."
+        
+      # Reject tests with too many assertions - following @api_unit_testing_rule
+      - pattern: "expect\\(.*?\\).*expect\\(.*?\\).*expect\\(.*?\\)"
+        message: "Tests should have at most 1-2 expect statements for focused verification. Split this test into smaller tests as outlined in @api_unit_testing_rule.mdc."
+        
+      # Reject implementation that skips error handling
+      - pattern: "(?s)async\\s+\\w+\\([^)]*\\)\\s*\\{(?!.*?catch|try)"
+        message: "Error handling is missing. Start with error test cases before implementing success paths."
+        
+      # Reject tests that don't follow AAA pattern
+      - pattern: "it\\(['\"](mdc:?:should|test).*?['\"]\\s*,\\s*(?:async\\s*)?\\(\\)\\s*=>\\s*\\{\\s*expect"
+        message: "Tests should follow the Arrange-Act-Assert pattern. Set up state, perform action, then assert results."
+        
+      # Reject direct imports in application layer - following @application_layer.mdc
+      - pattern: "import.*from.*['\"]\\.\\./(?!application).*['\"]"
+        message: "Application layer must not import from other layers. Use dependency injection and interfaces as specified in @application_layer.mdc."
+        
+      # Reject Command/Query classes not following pattern - following @command_query.mdc
+      - pattern: "class\\s+\\w+(?:Command|Query)(?!.*?implements (?:Command|Query)<)"
+        message: "Command/Query classes must implement the Command/Query interface as specified in @command_query.mdc."
+
+  - type: suggest
+    message: |
+      Backend Feature Implementation Best Practices:
+
+      1. Test-Driven Development (TDD) - Following @api_unit_testing_rule.mdc:
+         - Always follow Red-Green-Refactor:
+           1. Write a small failing test (Red)
+           2. Implement minimal code to make the test pass (Green)
+           3. Refactor without changing behavior (Refactor)
+         - Compilation errors count as failures
+         - Run tests after every change
+         - Use small, focused tests with 1-2 expect statements
+         - Start with error cases before success cases
+
+      2. Testing Structure - Following @api_unit_testing_rule.mdc:
+         - Test behaviors, not implementation details
+         - Begin with edge cases and failures
+         - Test error handling thoroughly
+         - Use simple, tracked fake dependencies
+         - Don't pre-declare interfaces in tests
+
+      3. Implementation Approach:
+         - Follow the clean architecture pattern
+         - Use dependency inversion in the application layer as per @application_layer.mdc
+         - Keep the application layer free from technical implementation details as per @application_layer.mdc
+         - Use interfaces and dependency injection as per @composition_root.mdc
+         - Follow the Command and Query pattern for operations as per @command_query.mdc
+         - Properly name implementation classes to include technology used as per @implementation_naming.mdc
+         - Follow file naming conventions according to @file_naming.mdc
+
+      4. Implementation Flow:
+         1. Write a test for the error path
+         2. Run test to confirm it fails (Red)
+         3. Implement minimal error handling code
+         4. Run test to confirm it passes (Green)
+         5. Refactor if needed
+         6. Write a test for the next scenario (usually another error case)
+         7. Repeat the process
+         8. Address success cases after error handling is complete
+         9. Implement end-to-end API tests last
+
+      5. Architecture Adherence:
+         - Application layer should contain business logic and interfaces (@application_layer.mdc)
+         - Infrastructure layer should contain technical implementations (@implementation_naming.mdc)
+         - API layer should use application services with proper dependency injection (@composition_root.mdc)
+         - Controllers should be thin and delegate to application services
+         - Commands and Queries should follow the pattern in @command_query.mdc with proper dependency structure
+         - All files should be named according to @file_naming.mdc
+
+examples:
+  - input: |
+      // Bad: Implementation first approach without tests
+      // violates @api_unit_testing_rule.mdc
+      // src/application/user/CreateUserCommand.ts
+      export class CreateUserCommand {
+        constructor(private readonly userRepo: UserRepository) {}
+        
+        async run(params: { name: string; email: string }): Promise<User> {
+          const user = new User(params.name, params.email);
+          await this.userRepo.save(user);
+          return user;
+        }
+      }
+
+    output: |
+      // Good: Test-first approach following @api_unit_testing_rule.mdc
+      // test/application/user/CreateUserCommand.test.ts
+      describe('CreateUserCommand', () => {
+        it('should throw error when email is invalid', async () => {
+          // Arrange
+          const fakeUserRepo = {
+            save: jest.fn(),
+            findByEmail: jest.fn()
+          };
+          const command = new CreateUserCommand({ userRepo: fakeUserRepo });
+          
+          // Act & Assert
+          await expect(command.run({ 
+            name: 'Test User', 
+            email: 'invalid-email' 
+          })).rejects.toThrow('Invalid email format');
+        });
+      });
+      
+      // src/application/user/CreateUserCommand.ts (after test fails)
+      // Following @command_query.mdc and @application_layer.mdc
+      export class CreateUserCommand implements Command<CreateUserParams, { data: User; events: UserEvent[] }> {
+        constructor(private readonly deps: {
+          userRepo: {
+            save: (user: User) => Promise<User>;
+            findByEmail: (email: string) => Promise<User | null>;
+          };
+        }) {}
+        
+        async run(params: { name: string; email: string }): Promise<{ data: User; events: UserEvent[] }> {
+          if (!this.isValidEmail(params.email)) {
+            throw new Error('Invalid email format');
+          }
+          
+          const user = new User(params.name, params.email);
+          const savedUser = await this.deps.userRepo.save(user);
+          return { 
+            data: savedUser, 
+            events: [{ type: 'USER_CREATED', payload: savedUser }]
+          };
+        }
+        
+        private isValidEmail(email: string): boolean {
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+      }
+
+  - input: |
+      // Bad: Handling multiple test cases in one test
+      // Violates @api_unit_testing_rule.mdc
+      it('should validate user data and save to database', async () => {
+        const fakeRepo = { save: jest.fn() };
+        const command = new CreateUserCommand(fakeRepo);
+        
+        // Test invalid email
+        await expect(command.run({ name: 'Test', email: 'invalid' }))
+          .rejects.toThrow('Invalid email');
+        
+        // Test invalid name
+        await expect(command.run({ name: '', email: 'valid@email.com' }))
+          .rejects.toThrow('Invalid name');
+        
+        // Test success case
+        const user = await command.run({ name: 'Valid', email: 'valid@email.com' });
+        expect(user.id).toBeDefined();
+        expect(fakeRepo.save).toHaveBeenCalled();
+      });
+
+    output: |
+      // Good: Separate tests for each case following @api_unit_testing_rule.mdc
+      describe('CreateUserCommand', () => {
+        // Test for invalid email
+        it('should throw error when email is invalid', async () => {
+          const fakeRepo = { save: jest.fn() };
+          const command = new CreateUserCommand({ userRepo: fakeRepo });
+          
+          await expect(command.run({ 
+            name: 'Test', 
+            email: 'invalid' 
+          })).rejects.toThrow('Invalid email');
+        });
+        
+        // Test for invalid name
+        it('should throw error when name is empty', async () => {
+          const fakeRepo = { save: jest.fn() };
+          const command = new CreateUserCommand({ userRepo: fakeRepo });
+          
+          await expect(command.run({ 
+            name: '', 
+            email: 'valid@email.com' 
+          })).rejects.toThrow('Invalid name');
+        });
+        
+        // Test for success case
+        it('should create user with valid data', async () => {
+          const savedUser = { id: 'test-id', name: 'Valid', email: 'valid@email.com' };
+          const fakeRepo = { 
+            save: jest.fn().mockResolvedValue(savedUser) 
+          };
+          const command = new CreateUserCommand({ userRepo: fakeRepo });
+          
+          const result = await command.run({ 
+            name: 'Valid', 
+            email: 'valid@email.com' 
+          });
+          
+          expect(result.data.id).toBe('test-id');
+        });
+      });
+
+  - input: |
+      // Bad: Controller with direct database access
+      // Violates application layer separation and @application_layer.mdc
+      export class UserController {
+        constructor(private readonly db: Database) {}
+        
+        async createUser(req: Request, res: Response): Promise<void> {
+          try {
+            const { name, email } = req.body;
+            const user = new User(name, email);
+            await this.db.users.insertOne(user);
+            res.status(201).json(user);
+          } catch (error) {
+            res.status(400).json({ error: error.message });
+          }
+        }
+      }
+
+    output: |
+      // Good: Controller delegating to application command
+      // Following @composition_root.mdc and proper naming from @file_naming.mdc
+      export class UserController {
+        constructor(private readonly deps: {
+          createUserCommand: { 
+            run: (params: { name: string; email: string }) => Promise<{ data: User; events: UserEvent[] }>
+          }
+        }) {}
+        
+        async createUser(req: Request, res: Response): Promise<void> {
+          try {
+            const { name, email } = req.body;
+            const result = await this.deps.createUserCommand.run({ name, email });
+            res.status(201).json(result.data);
+          } catch (error) {
+            res.status(400).json({ error: error.message });
+          }
+        }
+      }
+      
+  - input: |
+      // Bad: Infrastructure implementation without technology in name
+      // Violates @implementation_naming.mdc
+      export class UserRepository implements UserRepository {
+        constructor(private readonly client: any) {}
+        
+        async findById(id: string): Promise<User | null> {
+          const result = await this.client.findOne({ id });
+          return result ? new User(result.name, result.email) : null;
+        }
+      }
+
+    output: |
+      // Good: Infrastructure implementation with technology in name
+      // Following @implementation_naming.mdc
+      export class MongoUserRepository implements UserRepository {
+        constructor(private readonly client: any) {}
+        
+        async findById(id: string): Promise<User | null> {
+          const result = await this.client.findOne({ id });
+          return result ? new User(result.name, result.email) : null;
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.1
+</rule>

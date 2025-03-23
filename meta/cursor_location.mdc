@@ -1,0 +1,128 @@
+---
+description: Cursor Rules Location
+globs: *.mdc
+alwaysApply: false
+---
+# Cursor Rules Location
+
+Rules for placing and organizing Cursor rule files in the repository.
+
+<rule>
+name: cursor_rules_location
+description: Standards for placing Cursor rule files in the correct directory and handling updates
+filters:
+  # Match any .mdc files
+  - type: file_extension
+    pattern: "\\.mdc$"
+  # Match files that look like Cursor rules
+  - type: content
+    pattern: "(?s)<rule>.*?</rule>"
+  # Match file creation events
+  - type: event
+    pattern: "file_create"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject files in wrong location
+      - pattern: "^(?!\\.\\/\\.cursor\\/rules\\/.*\\.mdc$)"
+        message: "Cursor rule files (.mdc) must be placed in the .cursor/rules directory"
+        
+      # Reject duplicate rule files with version suffixes
+      - pattern: "^\\.\\/\\.cursor\\/rules\\/.*?_v\\d+\\.mdc$"
+        message: "Do not create new files for rule updates. Update the existing rule file and increment its version number."
+
+  - type: suggest
+    message: |
+      When creating or updating Cursor rules:
+
+      1. Always place rule files in PROJECT_ROOT/.cursor/rules/:
+         ```
+         .cursor/rules/
+         ├── your_rule_name.mdc
+         ├── another_rule.mdc
+         └── ...
+         ```
+
+      2. Follow the naming convention:
+         - Use snake_case for filenames
+         - Always use .mdc extension
+         - Make names descriptive of the rule's purpose
+
+      3. Directory structure:
+         ```
+         PROJECT_ROOT/
+         ├── .cursor/
+         │   └── rules/
+         │       ├── your_rule_name.mdc
+         │       └── ...
+         └── ...
+         ```
+
+      4. Never place rule files:
+         - In the project root
+         - In subdirectories outside .cursor/rules
+         - In any other location
+         
+      5. When updating existing rules:
+         - Updated rule files must overwrite the previously-existing rule file
+         - Always maintain the same filename and location as the original rule
+         - Never create duplicate rules with different filenames or version suffixes
+         - The new version must completely replace the old version in the same path
+         - Always increment the version number in the metadata section
+         - Document significant changes in commit messages
+
+      6. Version management:
+         - Version number must be incremented for every rule update
+         - Use semantic versioning (MAJOR.MINOR.PATCH)
+         - Major version changes (X.0.0) indicate breaking changes
+         - Minor version changes (0.X.0) indicate new features or guidance
+         - Patch version changes (0.0.X) indicate small corrections
+         - Never decrease version numbers
+         - Never skip version numbers
+
+examples:
+  - input: |
+      # Bad: Rule file in wrong location
+      rules/my_rule.mdc
+      my_rule.mdc
+      .rules/my_rule.mdc
+
+      # Good: Rule file in correct location
+      .cursor/rules/my_rule.mdc
+    output: "Correctly placed Cursor rule file"
+    
+  - input: |
+      # Bad: Creating new files for updated rules
+      .cursor/rules/my_rule_v2.mdc
+      .cursor/rules/my_rule_updated.mdc
+      .cursor/rules/my_rule_new.mdc
+      
+      # Good: Overwriting existing rule in the same location
+      .cursor/rules/my_rule.mdc  # (overwrites original my_rule.mdc with incremented version)
+    output: "Correctly updated existing Cursor rule file"
+    
+  - input: |
+      # Bad: Version number handling
+      metadata:
+        priority: high
+        version: 1.1  # Not incrementing version
+        
+      metadata:
+        priority: high
+        version: 2.1  # Skipping versions
+        
+      # Good: Version number handling
+      metadata:
+        priority: high
+        version: 1.2  # Incremented from 1.1 for minor update
+        
+      metadata:
+        priority: high
+        version: 2.0.0  # Major version for breaking changes
+    output: "Correctly versioned Cursor rule file"
+
+metadata:
+  priority: high
+  version: 1.3
+</rule>
