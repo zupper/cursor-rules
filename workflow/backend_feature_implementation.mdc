@@ -19,13 +19,13 @@ filters:
 actions:
   - type: reject
     conditions:
-      # Reject implementation without tests - following @api_unit_testing_rule
+      # Reject implementation without tests - following @tdd.mdc
       - pattern: "(?s)export\\s+class\\s+\\w+(?!.*test\\.ts)"
-        message: "No implementation should be created without corresponding tests. Write tests first following TDD principles as specified in @api_unit_testing_rule.mdc."
+        message: "No implementation should be created without corresponding tests. Write tests first following TDD principles as specified in @tdd.mdc."
         
-      # Reject tests with too many assertions - following @api_unit_testing_rule
+      # Reject tests with too many assertions - following @tdd.mdc
       - pattern: "expect\\(.*?\\).*expect\\(.*?\\).*expect\\(.*?\\)"
-        message: "Tests should have at most 1-2 expect statements for focused verification. Split this test into smaller tests as outlined in @api_unit_testing_rule.mdc."
+        message: "Tests should have at most 1-2 expect statements for focused verification. Split this test into smaller tests as outlined in @tdd.mdc."
         
       # Reject implementation that skips error handling
       - pattern: "(?s)async\\s+\\w+\\([^)]*\\)\\s*\\{(?!.*?catch|try)"
@@ -47,7 +47,7 @@ actions:
     message: |
       Backend Feature Implementation Best Practices:
 
-      1. Test-Driven Development (TDD) - Following @api_unit_testing_rule.mdc:
+      1. Test-Driven Development (TDD) - Following @tdd.mdc:
          - Always follow Red-Green-Refactor:
            1. Write a small failing test (Red)
            2. Implement minimal code to make the test pass (Green)
@@ -57,7 +57,7 @@ actions:
          - Use small, focused tests with 1-2 expect statements
          - Start with error cases before success cases
 
-      2. Testing Structure - Following @api_unit_testing_rule.mdc:
+      2. Testing Structure - Following @tdd.mdc:
          - Test behaviors, not implementation details
          - Begin with edge cases and failures
          - Test error handling thoroughly
@@ -95,7 +95,7 @@ actions:
 examples:
   - input: |
       // Bad: Implementation first approach without tests
-      // violates @api_unit_testing_rule.mdc
+      // violates @tdd.mdc
       // src/application/user/CreateUserCommand.ts
       export class CreateUserCommand {
         constructor(private readonly userRepo: UserRepository) {}
@@ -108,7 +108,7 @@ examples:
       }
 
     output: |
-      // Good: Test-first approach following @api_unit_testing_rule.mdc
+      // Good: Test-first approach following @tdd.mdc
       // test/application/user/CreateUserCommand.test.ts
       describe('CreateUserCommand', () => {
         it('should throw error when email is invalid', async () => {
@@ -157,7 +157,7 @@ examples:
 
   - input: |
       // Bad: Handling multiple test cases in one test
-      // Violates @api_unit_testing_rule.mdc
+      // Violates @tdd.mdc
       it('should validate user data and save to database', async () => {
         const fakeRepo = { save: jest.fn() };
         const command = new CreateUserCommand(fakeRepo);
@@ -177,7 +177,7 @@ examples:
       });
 
     output: |
-      // Good: Separate tests for each case following @api_unit_testing_rule.mdc
+      // Good: Separate tests for each case following @tdd.mdc
       describe('CreateUserCommand', () => {
         // Test for invalid email
         it('should throw error when email is invalid', async () => {
@@ -283,5 +283,5 @@ examples:
 
 metadata:
   priority: high
-  version: 1.1
+  version: 1.2
 </rule>

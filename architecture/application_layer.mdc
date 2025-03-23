@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
 # Application Layer Architecture Rule
 
 This rule enforces proper architecture principles for the application layer, ensuring it remains free of technical implementation details while using proper dependency inversion and injection.

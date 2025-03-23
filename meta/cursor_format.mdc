@@ -1,6 +1,7 @@
 ---
-description: Cursor Rules Location
+description: Cursor Rules Format
 globs: *.mdc
+alwaysApply: true
 ---
 # Cursor Rule Format
 
@@ -18,6 +19,18 @@ filters:
 actions:
   - type: reject
     conditions:
+      # Reject rules without metadata section at the top
+      - pattern: "^(?!---[\\s\\S]*?description:[^\\n]*[\\s\\S]*?---)"
+        message: "Cursor rules must begin with a metadata section enclosed in '---' containing at minimum a description field."
+        
+      # Reject rules without the description field in metadata
+      - pattern: "^---[\\s\\S]*?(?!description:)[\\s\\S]*?---"
+        message: "The metadata section must include a 'description' field that summarizes the rule's purpose."
+        
+      # Reject rules without the globs field in metadata
+      - pattern: "^---[\\s\\S]*?(?!globs:)[\\s\\S]*?---"
+        message: "The metadata section must include a 'globs' field that specifies which files the rule applies to."
+        
       # Reject rules without the <rule> tag
       - pattern: "^(?!.*<rule>).*$"
         message: "Cursor rules must include a <rule> tag with proper attributes."
@@ -46,13 +59,24 @@ actions:
     message: |
       Cursor Rule Structure Guide:
 
-      1. Basic Structure:
-         - Start with an H1 title (# Rule Name)
+      1. File Metadata Section:
+         - Every rule file must begin with a metadata section enclosed in '---'
+         - Required fields:
+           ```
+           ---
+           description: Brief description of the rule
+           globs: Pattern for files this rule applies to (e.g., "*.ts" or "src/**/*.js")
+           alwaysApply: true/false depending on whether the rule should always apply
+           ---
+           ```
+
+      2. Basic Structure:
+         - Start with an H1 title (# Rule Name) after the metadata section
          - Provide a concise description of the rule's purpose
          - Wrap the rule definition in <rule> tags
          - End with a closing </rule> tag
 
-      2. Required Components:
+      3. Required Components:
          - name: Machine-readable identifier (should match filename without extension)
          - description: One-line summary of the rule's purpose
          - filters: Define which files the rule applies to (file extensions, directories)
@@ -60,16 +84,16 @@ actions:
          - examples: Provide before/after examples to illustrate the rule
          - metadata: Include priority and version information
 
-      3. Actions:
+      4. Actions:
          - reject: Patterns that should trigger errors/warnings with clear messages
          - suggest: Helpful guidelines and examples for developers to follow
 
-      4. Examples Format:
+      5. Examples Format:
          - Provide pairs of input/output examples
          - Show incorrect patterns and their corrected versions
          - Use realistic code that demonstrates the rule's intent
 
-      5. Metadata:
+      6. Rule Metadata:
          - priority: high, medium, or low
          - version: Semantic versioning (e.g., 1.0)
          - Optional: tags and related_rules
@@ -95,6 +119,11 @@ examples:
               message: "Don't do this"
 
     output: |
+      ---
+      description: My Rule for TypeScript Files
+      globs: "**/*.ts"
+      alwaysApply: false
+      ---
       # My Rule
       
       This is a rule that enforces specific patterns in TypeScript files.
@@ -148,6 +177,11 @@ examples:
       </rule>
 
     output: |
+      ---
+      description: Console Usage Rule
+      globs: "**/*.js"
+      alwaysApply: true
+      ---
       # Console Usage Rule
       
       This rule enforces proper logging practices by discouraging direct console usage.
@@ -199,6 +233,6 @@ examples:
 
 metadata:
   priority: high
-  version: 1.0
+  version: 1.1
   tags: ["meta", "documentation", "standards"]
 </rule> 

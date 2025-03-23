@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
 # Generic Examples Rule
 
 This meta-rule ensures that Cursor rules use generic, broadly applicable examples instead of domain-specific terminology or implementations that might not be relevant to other projects.
