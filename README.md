@@ -1,6 +1,6 @@
 # Cursor Rules
 
-This directory contains static analysis rules that define code conventions and architectural guidelines for the project. The rules are organized into logical categories based on their purpose.
+This directory contains Cursor rules that define code conventions and architectural guidelines for projects using TypeScript and a clean architecture/hexagonal style layer separation. The rules are organized into logical categories based on their purpose.
 
 ## Directory Structure
 
@@ -48,6 +48,6 @@ This directory contains static analysis rules that define code conventions and a
 
 ## Usage
 
-These rules are automatically enforced by the Cursor IDE. They help maintain code quality and architectural integrity across the project.
+When placed under `.cursor/rules` and when using the Cursor IDE, these rules are automatically enforced by Cursor.
 
 For more detailed information about a specific rule, refer to the rule file itself, which contains comprehensive examples and explanations. 
