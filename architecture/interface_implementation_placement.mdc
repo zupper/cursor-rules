@@ -1,0 +1,183 @@
+---
+description: Enforces proper placement of interfaces and their implementations in the application architecture
+globs: "**/*.ts"
+alwaysApply: true
+---
+# Interface Implementation Placement Rule
+
+This rule enforces the proper placement of interfaces and their implementations within the application architecture, ensuring that application-layer implementations are correctly located in the application services directory.
+
+<rule>
+name: interface_implementation_placement_rule
+description: Enforces correct placement of interfaces and their implementations within the architecture
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?:class|interface|implements)"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject application service implementations outside the application/services directory
+      - pattern: "class\\s+([A-Za-z]+)\\s+implements\\s+I([A-Za-z]+)"
+        validate: |
+          const implName = capture[1];
+          const interfaceName = `I${capture[2]}`;
+          
+          // If this is a service or application-layer component
+          if (implName.endsWith('Service') || 
+              implName.endsWith('UseCase') || 
+              implName.endsWith('Query') || 
+              implName.endsWith('Command')) {
+            
+            // Check if the file is in the application/services directory
+            if (!file.path.includes('/application/services/')) {
+              return `Application service implementation '${implName}' should be in 'src/application/services/' directory. It implements interface '${interfaceName}' which is an application layer concern.`;
+            }
+          }
+          
+          return true;
+          
+      # Reject interfaces not placed in the ports directory
+      - pattern: "export\\s+interface\\s+I([A-Za-z]+)"
+        validate: |
+          const interfaceName = `I${capture[1]}`;
+          
+          // If this is an application service interface
+          if (interfaceName.includes('Service') || 
+              interfaceName.includes('Repository') || 
+              interfaceName.includes('Query') ||
+              interfaceName.includes('Command')) {
+              
+            // Check if the file is in the application/ports directory
+            if (!file.path.includes('/application/ports/')) {
+              return `Application interface '${interfaceName}' should be in 'src/application/ports/' directory.`;
+            }
+          }
+          
+          return true;
+          
+      # Reject utility service implementations in lib that should be in application
+      - pattern: "export\\s+class\\s+([A-Za-z]+Service)(?!\\s+implements)"
+        validate: |
+          const className = capture[1];
+          
+          // If this is in the lib folder but looks like an application service
+          if (file.path.includes('/lib/') && 
+              (className.endsWith('Service') && !className.includes('Http') && !className.includes('Storage'))) {
+            
+            return `Service '${className}' appears to be an application layer concern but is located in the lib directory. If it's an application service, place it in 'src/application/services/' and implement an interface.`;
+          }
+          
+          return true;
+
+  - type: suggest
+    message: |
+      # Proper Interface and Implementation Placement
+
+      ## Directory Structure
+      
+      In clean architecture, interfaces and implementations should be organized as follows:
+      
+      1. Application Layer:
+         - Interfaces (ports): `src/application/ports/`
+         - Implementations: `src/application/services/`
+      
+      2. Infrastructure Layer:
+         - Technical implementations: `src/infrastructure/`
+      
+      ## Interface Naming Convention:
+      
+      - Application interfaces should be prefixed with "I" (e.g., `IUserService`)
+      - Implementation classes should have the same name without the "I" (e.g., `UserService`)
+      
+      ## Proper Implementation Placement:
+      
+      ```typescript
+      // Interface (src/application/ports/IUserService.ts)
+      export interface IUserService {
+        getUsers(): Promise<User[]>;
+      }
+      
+      // Application implementation (src/application/services/UserService.ts)
+      export class UserService implements IUserService {
+        getUsers(): Promise<User[]> {
+          // Application logic
+        }
+      }
+      ```
+      
+      ## Common Mistakes to Avoid:
+      
+      1. Placing implementations in the wrong layer:
+         - Application services should not be in `src/lib/` or other directories
+         - They should be in `src/application/services/`
+      
+      2. Missing interfaces:
+         - Application services should implement interfaces from `src/application/ports/`
+         - Make the contract explicit with interfaces
+      
+      3. Misuse of directories:
+         - `src/lib/` should be for shared utilities, not application services
+         - Application logic belongs in `src/application/`
+
+examples:
+  - input: |
+      // src/lib/user-service.ts
+      export class UserService {
+        async getUsers() {
+          // Business logic for fetching users
+          return users;
+        }
+      }
+
+    output: |
+      // src/application/ports/IUserService.ts
+      export interface IUserService {
+        getUsers(): Promise<User[]>;
+      }
+      
+      // src/application/services/UserService.ts
+      export class UserService implements IUserService {
+        async getUsers(): Promise<User[]> {
+          // Business logic for fetching users
+          return users;
+        }
+      }
+
+  - input: |
+      // src/lib/occasion-service.ts
+      import { IOccasionService } from '@/application/ports/IOccasionService';
+      
+      export class OccasionService implements IOccasionService {
+        // Implementation of IOccasionService interface
+        getAllOccasions(people: Person[]): Array<{ person: Person; occasion: Occasion }> {
+          return people.flatMap(person => 
+            person.occasions.map(occasion => ({ person, occasion }))
+          );
+        }
+        
+        // Other methods...
+      }
+
+    output: |
+      // src/application/services/OccasionService.ts
+      import { IOccasionService } from '@/application/ports/IOccasionService';
+      
+      export class OccasionService implements IOccasionService {
+        // Implementation of IOccasionService interface
+        getAllOccasions(people: Person[]): Array<{ person: Person; occasion: Occasion }> {
+          return people.flatMap(person => 
+            person.occasions.map(occasion => ({ person, occasion }))
+          );
+        }
+        
+        // Other methods...
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+  tags: ["architecture", "clean-architecture", "interfaces", "implementation"]
+</rule> 

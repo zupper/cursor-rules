@@ -1,0 +1,162 @@
+---
+description: View Layer Organization Rule
+globs: "src/view/**/*.{ts,tsx,js,jsx}"
+alwaysApply: false
+---
+# View Layer Organization Rule
+
+This rule enforces architectural standards for organizing the view layer in a frontend project, ensuring proper separation between pages and reusable components. The view layer is contained within a folder called "view" under "src".
+
+<rule>
+name: view_layer_organization_rule
+description: Enforces consistent organization of pages and components in the view layer
+filters:
+  - type: file_extension
+    pattern: "\\.(ts|tsx|js|jsx)$"
+  - type: directory
+    pattern: "src/view/"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject page-specific components placed in generic components folder
+      - pattern: "import\\s+.*?from\\s+['\"].*?/view/components/(?!ui/)[^/]+/[^/]+['\"]"
+        message: "Page-specific components should be placed in their respective page folder, not in the shared components directory."
+        
+      # Reject components with 'Page' suffix not in pages directory
+      - pattern: "export\\s+(?:default\\s+)?(?:const|function|class)\\s+([A-Z]\\w*Page)"
+        validate: |
+          if (!file.path.includes('/view/pages/')) {
+            return "Components with 'Page' suffix must be placed in the pages directory.";
+          }
+          return true;
+          
+      # Reject pages importing directly from other pages
+      - pattern: "import\\s+.*?from\\s+['\"].*?/view/pages/[^/]+/(?!index)[^/]+['\"]"
+        validate: |
+          if (file.path.includes('/view/pages/')) {
+            return "Pages should not import components directly from other pages. Move shared components to the components directory.";
+          }
+          return true;
+
+  - type: suggest
+    message: |
+      # View Layer Organization
+
+      The view layer should be organized following these guidelines:
+
+      ## 1. Directory Structure
+      ```
+      src/
+      └── view/                # View layer container
+          ├── pages/           # Container for all pages
+          │   ├── HomePage/    # Each page in its own directory
+          │   │   ├── index.tsx     # Main page component (exported)
+          │   │   ├── HomeHero.tsx  # Page-specific components
+          │   │   └── HomeFeatures.tsx
+          │   ├── ProfilePage/
+          │   │   ├── index.tsx     # Main page component
+          │   │   ├── ProfileTabs.tsx
+          │   │   └── ProfileSettings.tsx
+          │   └── ...
+          ├── components/      # Shared components
+          │   ├── ui/          # Generic UI building blocks
+          │   │   ├── Button.tsx
+          │   │   ├── Input.tsx
+          │   │   └── ...
+          │   ├── layout/      # Layout components
+          │   │   ├── Header.tsx
+          │   │   ├── Footer.tsx
+          │   │   └── ...
+          │   └── ... 
+      ```
+
+      ## 2. Component Classification
+      - **Pages**: Container components that represent entire views/routes
+      - **Page-specific components**: Components used only within a specific page
+      - **Shared components**: Reusable components used across multiple pages
+
+      ## 3. Best Practices
+      - Pages should be the only components directly connected to routing
+      - Use index.tsx files to export the main component for each page
+      - Name page-specific components with a prefix related to the page
+      - Avoid direct imports between different page directories
+      - Move components to the shared directory when used by multiple pages
+
+      ## 4. File Naming
+      - Page components: Use PascalCase with 'Page' suffix (HomePage.tsx)
+      - Page directories: Use PascalCase matching the component name (HomePage/)
+      - Page-specific components: Use PascalCase with relevant prefix (HomeFeatures.tsx)
+      - Shared components: Use PascalCase based on their function (Button.tsx)
+
+examples:
+  - input: |
+      // Bad: Page-specific component in shared directory
+      // src/view/components/ProfileBio.tsx
+      import React from 'react';
+      
+      export const ProfileBio = ({ user }) => {
+        return (
+          <div className="profile-bio">
+            <h3>{user.name}</h3>
+            <p>{user.bio}</p>
+          </div>
+        );
+      };
+
+    output: |
+      // Good: Page-specific component in page directory
+      // src/view/pages/ProfilePage/ProfileBio.tsx
+      import React from 'react';
+      
+      export const ProfileBio = ({ user }) => {
+        return (
+          <div className="profile-bio">
+            <h3>{user.name}</h3>
+            <p>{user.bio}</p>
+          </div>
+        );
+      };
+
+  - input: |
+      // Bad: Cross-importing between pages
+      // src/view/pages/HomePage/index.tsx
+      import React from 'react';
+      import { ProfileAvatar } from '../ProfilePage/ProfileAvatar';
+      
+      export const HomePage = () => {
+        return (
+          <div>
+            <h1>Home Page</h1>
+            <ProfileAvatar />
+          </div>
+        );
+      };
+
+    output: |
+      // Good: Shared component moved to components directory
+      // src/view/components/Avatar.tsx
+      import React from 'react';
+      
+      export const Avatar = ({ user }) => {
+        return <img src={user.avatar} alt={user.name} className="avatar" />;
+      };
+      
+      // src/view/pages/HomePage/index.tsx
+      import React from 'react';
+      import { Avatar } from '@/view/components/Avatar';
+      
+      export const HomePage = () => {
+        return (
+          <div>
+            <h1>Home Page</h1>
+            <Avatar user={currentUser} />
+          </div>
+        );
+      };
+
+metadata:
+  priority: high
+  version: 1.1
+  tags: ["architecture", "frontend", "organization"]
+</rule> 

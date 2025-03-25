@@ -1,0 +1,161 @@
+---
+description: Specific Naming Rule
+globs: **/src/**/*.ts
+alwaysApply: true
+---
+# Specific Naming Rule
+
+This rule enforces the use of specific, descriptive names instead of generic terms like "util" or "utils", promoting better code organization and clarity.
+
+<rule>
+name: specific_naming_rule
+description: Enforces specific naming and discourages generic utility files
+filters:
+  - type: file_extension
+    pattern: "\\.ts$"
+  - type: content
+    pattern: "(?s).*"
+
+actions:
+  - type: reject
+    conditions:
+      # Reject files with "util" or "utils" in their name
+      - pattern: "(?i)(?:^|/)(?:util|utils)(?:\\.ts$|\\.js$)"
+        message: "Avoid naming files 'util.ts' or 'utils.ts'. Use more specific names that describe their purpose."
+        
+      # Reject directories named "util" or "utils"
+      - pattern: "(?i)(?:^|/)(?:util|utils)/"
+        message: "Avoid creating directories named 'util' or 'utils'. Organize functionality by domain or feature instead."
+        
+      # Reject functions/variables with overly generic util names
+      - pattern: "(?:function|const|let|var)\\s+(?:get|create|make|format|process|handle|parse)?[Uu]til(?:s|ity|ities|Helper|Helpers)\\s*\\("
+        message: "Avoid generic utility function names. Use domain-specific names that describe what the function does, not that it's a 'utility'."
+        
+      # Reject classes with generic util names
+      - pattern: "class\\s+(?:[A-Z][a-z]*)?[Uu]til(?:s|ity|ities|Helper|Helpers)"
+        message: "Avoid generic utility class names. Name classes after their domain or purpose, not their technical classification."
+
+  - type: suggest
+    message: |
+      # Specific Naming Best Practices
+
+      Instead of creating generic utility files or functions, consider these alternatives:
+
+      1. Domain-Specific Service Classes
+         - Organize functionality around specific domains or features
+         - Name classes after what they do, not their technical classification
+         - Example: `ImageCompressor` instead of `ImageUtils`
+
+      2. Component-Specific Helpers
+         - Place helper functions in the components that use them
+         - For shared functionality, create domain-specific service classes
+         - Example: `formatCurrency()` instead of `currencyUtil()`
+
+      3. Extension Methods
+         - Extend existing types with additional functionality
+         - Example: `DateFormatter` instead of `dateUtils`
+
+      4. Dedicated Purpose Files
+         - Name files after what they specifically do
+         - Example: `image-compression.ts` instead of `image-utils.ts`
+
+      5. Better Organization Patterns:
+         - `/src/services/image-processing/` instead of `/src/utils/`
+         - `/src/formatting/currency.ts` instead of `/src/utils/formatting.ts`
+         - `/src/validation/email.ts` instead of `/src/utils/validation.ts`
+
+      When you reach for a generic "utils" name, ask yourself:
+      - What domain does this functionality belong to?
+      - What is the specific purpose of this code?
+      - Would this be better as a service, helper, formatter, or processor?
+
+examples:
+  - input: |
+      // src/utils/image-utils.ts
+      export const compressImage = (dataUrl: string): Promise<string> => {
+        // Image compression logic
+      };
+      
+      export const readFileAsDataURL = (file: File): Promise<string> => {
+        // File reading logic
+      };
+
+    output: |
+      // src/services/image/image-processor.ts
+      export class ImageProcessor {
+        /**
+         * Compresses an image by resizing it
+         */
+        static compress(dataUrl: string): Promise<string> {
+          // Image compression logic
+        }
+        
+        /**
+         * Reads a file as a data URL
+         */
+        static readAsDataURL(file: File): Promise<string> {
+          // File reading logic
+        }
+      }
+
+  - input: |
+      // Bad: Generic utils function
+      export function formatUtil(value: any, type: string): string {
+        switch (type) {
+          case 'currency':
+            return `$${value.toFixed(2)}`;
+          case 'date':
+            return new Date(value).toLocaleDateString();
+          default:
+            return String(value);
+        }
+      }
+
+    output: |
+      // Good: Specific formatters
+      export class CurrencyFormatter {
+        static format(value: number): string {
+          return `$${value.toFixed(2)}`;
+        }
+      }
+      
+      export class DateFormatter {
+        static format(value: Date | string | number): string {
+          return new Date(value).toLocaleDateString();
+        }
+      }
+
+  - input: |
+      // src/utils/validation-utils.ts
+      export const validateEmail = (email: string): boolean => {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      };
+      
+      export const validatePassword = (password: string): boolean => {
+        return password.length >= 8;
+      };
+
+    output: |
+      // src/validation/email-validator.ts
+      export class EmailValidator {
+        static isValid(email: string): boolean {
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+      }
+      
+      // src/validation/password-validator.ts
+      export class PasswordValidator {
+        static meetsRequirements(password: string): boolean {
+          return password.length >= 8;
+        }
+        
+        static getStrength(password: string): 'weak' | 'medium' | 'strong' {
+          // Implementation
+        }
+      }
+
+metadata:
+  priority: high
+  version: 1.0
+  tags: ["naming", "organization", "best-practices"]
+</rule> 
