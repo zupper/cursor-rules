@@ -1,0 +1,203 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Small Incremental Steps
+
+## Description
+This workflow rule enforces development in small, incremental steps with continuous testing verification. It focuses on creating only what is immediately necessary, avoiding overengineering, and following a strict test-first approach. The rule requires developers to start with test files, then implement source files only after verifying that tests fail appropriately, continually taking the smallest possible steps to make progress while maintaining high test coverage and minimal implementation.
+
+<rule>
+name: small_incremental_steps_rule
+description: Enforces small, incremental development steps with continuous testing
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these small, incremental development practices:
+      - Create only files and folders that are immediately necessary
+      - Always start by writing a test file first
+      - Only create source files when test compilation fails due to missing imports
+      - Take the smallest possible step to make the test pass
+      - Continuously verify with tests before proceeding
+      - Avoid implementing anything not required by tests
+      - Don't overengineer or speculate about future requirements
+</rule>
+
+## Rule
+1. Development MUST begin with creating a test file, not source files
+2. Source files MUST only be created after test compilation fails due to missing imports
+3. Implementation MUST be limited to the minimum required to make tests pass
+4. New functionality MUST NOT be implemented without tests requiring it
+5. Files and folders MUST only be created when immediately needed
+6. Development MUST progress in the smallest possible increments
+7. Each step MUST be verified by tests before proceeding to the next
+8. Test failures MUST be resolved by implementing the minimal code necessary
+9. Refactoring SHOULD only occur after tests are passing
+10. Code structure SHOULD evolve incrementally based on test requirements
+11. Future requirements MUST NOT be anticipated or implemented speculatively
+
+## Implementation
+- Always start by creating a test file for new functionality
+- Write a test that describes the expected behavior
+- Attempt to compile the test, which will fail due to missing imports
+- Create source files only after test compilation fails
+- Implement only what's needed to make the test pass
+- Run tests after each small change to verify correctness
+- Avoid creating any directories, files, or code not immediately needed
+- Resist the urge to implement "nice to have" features without tests
+- Add new tests for each small increment of functionality
+- Refactor only after tests are passing
+- Let the system design evolve organically through test-driven development
+
+## Benefits
+- Prevents overengineering and speculative development
+- Ensures high test coverage by design
+- Creates simpler, more focused implementations
+- Reduces wasted effort on unused features
+- Maintains continuous verification of correctness
+- Provides clear progress indicators through passing tests
+- Improves code quality through continual testing
+- Reduces debug time by catching issues early
+- Creates more maintainable and modular code
+- Supports iterative design refinement
+- Prevents scope creep and feature bloat
+
+## Examples
+✅ Correct workflow:
+```rust
+// Step 1: Create test file first
+// In test/article_service_test.rs
+#[cfg(test)]
+mod tests {
+    // This will fail to compile because ArticleService doesn't exist yet
+    use crate::services::article::ArticleService;
+    
+    #[test]
+    fn should_create_article_with_title() {
+        // Test code here
+    }
+}
+
+// Step 2: Create minimal source file after test compilation fails
+// In src/services/article.rs
+pub struct ArticleService;
+
+// Step 3: Update test with more specific assertions
+#[test]
+fn should_create_article_with_title() {
+    let service = ArticleService::new();
+    let result = service.create_article("Test Title");
+    assert!(result.is_ok());
+}
+
+// Step 4: Implement minimal functionality to make the test compile
+impl ArticleService {
+    pub fn new() -> Self {
+        Self
+    }
+    
+    pub fn create_article(&self, _title: &str) -> Result<(), Error> {
+        unimplemented!()
+    }
+}
+
+// Step 5: Implement minimal functionality to make the test pass
+impl ArticleService {
+    pub fn new() -> Self {
+        Self
+    }
+    
+    pub fn create_article(&self, _title: &str) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+// Step 6: Add more test assertions for additional requirements
+#[test]
+fn should_create_article_with_title() {
+    let service = ArticleService::new();
+    let result = service.create_article("Test Title");
+    assert!(result.is_ok());
+    
+    let article = result.unwrap();
+    assert_eq!(article.title, "Test Title");
+}
+
+// Step 7: Update implementation to satisfy the new assertion
+pub struct Article {
+    pub title: String,
+}
+
+impl ArticleService {
+    pub fn create_article(&self, title: &str) -> Result<Article, Error> {
+        Ok(Article {
+            title: title.to_string(),
+        })
+    }
+}
+
+// Continue this pattern for each small feature increment
+```
+
+❌ Incorrect workflow:
+```rust
+// Creating source file before test
+// In src/services/article.rs
+pub struct ArticleService {
+    repository: ArticleRepository,
+    validator: ArticleValidator,
+    publisher: ArticlePublisher,
+    cache: ArticleCache,
+}
+
+impl ArticleService {
+    pub fn new(
+        repository: ArticleRepository,
+        validator: ArticleValidator,
+        publisher: ArticlePublisher,
+        cache: ArticleCache,
+    ) -> Self {
+        Self {
+            repository,
+            validator,
+            publisher,
+            cache,
+        }
+    }
+    
+    pub fn create_article(&self, article: ArticleRequest) -> Result<Article, Error> {
+        // Lots of implementation without tests driving it
+        // ...
+    }
+    
+    pub fn publish_article(&self, id: &str) -> Result<(), Error> {
+        // Implemented speculatively without a test requiring it
+        // ...
+    }
+    
+    pub fn feature_not_needed_yet(&self) -> Result<(), Error> {
+        // Implementing something that isn't required yet
+        // ...
+    }
+}
+
+// Creating too many files upfront
+// src/services/article_repository.rs
+// src/services/article_validator.rs
+// src/services/article_publisher.rs
+// src/services/article_cache.rs
+
+// Only later writing tests
+// test/article_service_test.rs
+#[test]
+fn test_create_article() {
+    // Test written after implementation
+}
+``` 

@@ -1,0 +1,110 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Idiomatic Rust Patterns
+
+## Description
+This pattern rule ensures Rust code follows idiomatic practices that align with the Rust community's conventions and the official Rust style guide. Following idiomatic Rust improves code readability, maintainability, and helps leverage the language's strengths.
+
+<rule>
+name: idiomatic_rust_rule
+description: Enforces idiomatic Rust coding patterns and style
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Ensure your Rust code follows these idiomatic practices:
+      - Use snake_case for variables, functions, and modules
+      - Use CamelCase for types and traits
+      - Use SCREAMING_SNAKE_CASE for constants
+      - Prefer the ? operator for error handling instead of match where appropriate
+      - Use enums for alternatives and pattern matching for flow control
+      - Leverage the type system to prevent errors at compile time
+      - Use meaningful ownership patterns (borrowing vs. owning)
+</rule>
+
+## Rule
+1. Variable, function, and module names MUST use snake_case
+2. Type and trait names MUST use CamelCase
+3. Constant names MUST use SCREAMING_SNAKE_CASE
+4. Error handling SHOULD use the ? operator where appropriate
+5. Code SHOULD leverage pattern matching with match and if let
+6. Functions SHOULD take arguments by reference when they don't need ownership
+7. Code SHOULD use Rust's enum types for representing alternatives
+8. Code MUST NOT fight the borrow checker with excessive cloning or unsafe blocks
+9. Code SHOULD use Option and Result types appropriately for absent values and error handling
+10. Public APIs MUST have documentation comments (///)
+
+## Implementation
+- Follow the Rust style guide established in rustfmt
+- Use clippy to catch non-idiomatic patterns
+- Review code to ensure it follows Rust conventions
+- Prefer using standard library types and traits where applicable
+- Use meaningful variable and function names that indicate their purpose
+- Structure code around Rust's ownership and borrowing system
+
+## Benefits
+- More readable and maintainable code
+- Better interoperability with existing Rust libraries
+- Fewer bugs and errors related to memory management
+- More efficient code that takes advantage of Rust's strengths
+- Easier onboarding for developers familiar with Rust
+- Better leveraging of compiler checks and optimizations
+
+## Examples
+✅ Correct:
+```rust
+// Using snake_case for functions and variables
+fn calculate_total_price(items: &[Item]) -> Result<f64, PriceError> {
+    let mut total_price = 0.0;
+    
+    for item in items {
+        let item_price = item.price()?;  // Using ? operator
+        total_price += item_price;
+    }
+    
+    Ok(total_price)
+}
+
+// Using pattern matching
+fn process_command(cmd: Command) -> Result<Output, Error> {
+    match cmd {
+        Command::Save(data) => save_to_file(data),
+        Command::Load(path) => load_from_file(&path),
+        Command::Quit => Ok(Output::Exit),
+    }
+}
+```
+
+❌ Incorrect:
+```rust
+// Not using snake_case
+fn CalculatePrice(Items: &[Item]) -> f64 {
+    // Not handling errors properly
+    let mut TotalPrice = 0.0;
+    
+    for i in 0..Items.len() {
+        // Excessive cloning and indexing
+        let ItemPrice = Items[i].clone().price().unwrap();
+        TotalPrice = TotalPrice + ItemPrice;
+    }
+    
+    return TotalPrice;
+}
+
+// Fighting with the borrow checker
+fn process(cmd: &Command) -> Output {
+    // Using unsafe unnecessarily
+    unsafe {
+        // Complicated and non-idiomatic code
+        // ...
+    }
+}
+``` 

@@ -1,0 +1,189 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Dependency Inversion Principle
+
+## Description
+This architecture rule enforces the Dependency Inversion Principle in Rust code, ensuring that high-level modules do not depend on low-level modules, but instead both depend on abstractions. It promotes the use of traits for abstracting implementation details, ensuring that application logic remains decoupled from technical infrastructure concerns.
+
+<rule>
+name: dependency_inversion_rule
+description: Enforces the Dependency Inversion Principle in module architecture
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow the Dependency Inversion Principle:
+      - High-level modules should not depend on low-level modules
+      - Both should depend on abstractions (traits)
+      - Keep application logic free from technical implementation details
+      - Use dependency injection to provide concrete implementations
+      - Separate interface definition from implementation
+      - Design for testability by enabling mock implementations
+</rule>
+
+## Rule
+1. Application logic MUST NOT directly depend on database, HTTP, or other technical implementation details
+2. Core business logic SHOULD be defined in terms of traits/interfaces
+3. Dependencies SHOULD be injected through constructors or builder patterns
+4. Implementation details MUST be placed behind trait interfaces
+5. Technical adapters SHOULD implement domain interfaces
+6. Module boundaries MUST be respected with clear dependency directions
+7. Tests SHOULD use mock implementations of interfaces
+8. Domain models MUST NOT contain technical implementation details
+
+## Implementation
+- Define traits in domain/application modules that are implemented by technical modules
+- Use dependency injection containers or manual wiring in composition roots
+- Create adapter implementations that translate between domain and technical models
+- Organize code in layers (domain, application, infrastructure) with clear boundaries
+- Use generics with trait bounds to accept different implementations
+- Place trait definitions in the modules that use them, not where they're implemented
+- Create separate crates for domain, application, and infrastructure concerns
+- Use newtype patterns to prevent leaking implementation details
+
+## Benefits
+- Decoupled architecture that's easier to maintain and evolve
+- Improved testability through mock implementations
+- Protected domain logic from technical implementation changes
+- Clearer separation of concerns
+- Easier to swap out technical implementations
+- Better adherence to SOLID principles
+- More maintainable codebase over time
+- Reduced technical debt
+
+## Examples
+✅ Correct:
+```rust
+// Domain module
+pub mod domain {
+    // Domain entity
+    pub struct Article {
+        pub id: String,
+        pub title: String,
+        pub content: String,
+    }
+    
+    // Domain repository interface
+    pub trait ArticleRepository {
+        fn find_by_id(&self, id: &str) -> Result<Option<Article>, Error>;
+        fn save(&self, article: &Article) -> Result<(), Error>;
+        fn delete(&self, id: &str) -> Result<(), Error>;
+    }
+    
+    // Domain service using the interface
+    pub struct ArticleService<R: ArticleRepository> {
+        repository: R,
+    }
+    
+    impl<R: ArticleRepository> ArticleService<R> {
+        pub fn new(repository: R) -> Self {
+            Self { repository }
+        }
+        
+        pub fn get_article(&self, id: &str) -> Result<Option<Article>, Error> {
+            self.repository.find_by_id(id)
+        }
+        
+        pub fn update_article(&self, article: &Article) -> Result<(), Error> {
+            self.repository.save(article)
+        }
+    }
+}
+
+// Infrastructure module
+pub mod infrastructure {
+    use crate::domain::{Article, ArticleRepository, Error};
+    use sqlx::PgPool;
+    
+    // Technical implementation of the domain interface
+    pub struct PostgresArticleRepository {
+        pool: PgPool,
+    }
+    
+    impl PostgresArticleRepository {
+        pub fn new(pool: PgPool) -> Self {
+            Self { pool }
+        }
+    }
+    
+    impl ArticleRepository for PostgresArticleRepository {
+        fn find_by_id(&self, id: &str) -> Result<Option<Article>, Error> {
+            // Implementation using PostgreSQL
+        }
+        
+        fn save(&self, article: &Article) -> Result<(), Error> {
+            // Implementation using PostgreSQL
+        }
+        
+        fn delete(&self, id: &str) -> Result<(), Error> {
+            // Implementation using PostgreSQL
+        }
+    }
+}
+
+// Application composition
+fn main() {
+    let pool = PgPool::connect("database_url").await.unwrap();
+    let repository = infrastructure::PostgresArticleRepository::new(pool);
+    let service = domain::ArticleService::new(repository);
+    
+    // Now use the service with the injected repository
+}
+```
+
+❌ Incorrect:
+```rust
+// Domain entity with infrastructure details
+pub struct Article {
+    pub id: String,
+    pub title: String,
+    pub content: String,
+    pub db_connection: PgConnection, // Technical concern in domain model
+}
+
+// Service with direct infrastructure dependency
+pub struct ArticleService {
+    db_pool: PgPool, // Direct dependency on technical implementation
+}
+
+impl ArticleService {
+    pub fn new(db_pool: PgPool) -> Self {
+        Self { db_pool }
+    }
+    
+    pub fn get_article(&self, id: &str) -> Result<Option<Article>, Error> {
+        // Direct database query in service
+        let article = sqlx::query_as!(
+            Article,
+            "SELECT id, title, content FROM articles WHERE id = $1",
+            id
+        )
+        .fetch_optional(&self.db_pool)
+        .await?;
+        
+        Ok(article)
+    }
+    
+    pub fn update_article(&self, article: &Article) -> Result<(), Error> {
+        // Direct database query in service
+        sqlx::query!(
+            "UPDATE articles SET title = $1, content = $2 WHERE id = $3",
+            article.title,
+            article.content,
+            article.id
+        )
+        .execute(&self.db_pool)
+        .await?;
+        
+        Ok(())
+    }
+}
+``` 

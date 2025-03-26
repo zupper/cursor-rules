@@ -1,0 +1,172 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Rust Performance Best Practices
+
+## Description
+This pattern rule promotes effective performance optimization practices in Rust code. It focuses on leveraging Rust's zero-cost abstractions, minimizing unnecessary allocations, utilizing efficient data structures, and employing appropriate concurrency patterns. The rule aims to help developers write high-performance Rust code while maintaining readability and safety.
+
+<rule>
+name: rust_performance_rule
+description: Enforces performance best practices for Rust code
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these Rust performance best practices:
+      - Prefer stack allocation over heap allocation where possible
+      - Use efficient data structures appropriate for access patterns
+      - Minimize cloning of large data structures
+      - Leverage zero-cost abstractions like iterators
+      - Consider using interior mutability for targeted mutability
+      - Use iterators with adaptors over manual loops
+      - Profile before optimizing to identify actual bottlenecks
+      - Use parallelism for CPU-bound work on large data sets
+</rule>
+
+## Rule
+1. Unnecessary heap allocations SHOULD be avoided
+2. Large values SHOULD be passed by reference rather than by value
+3. String concatenation in loops SHOULD use efficient methods (e.g., `format!`, `String::with_capacity`)
+4. Appropriate data structures SHOULD be chosen based on access patterns
+5. Hot paths SHOULD avoid unnecessary allocations and runtime checks
+6. Box, Rc, or Arc SHOULD only be used when necessary
+7. Iterator adaptors SHOULD be preferred over manual loops for transformations
+8. Parallelism SHOULD be used for CPU-bound operations on large datasets
+9. Async/await SHOULD be used for I/O-bound operations
+10. Memory pre-allocation SHOULD be used when the size is known beforehand
+11. Optimization MUST be based on profiling results, not assumptions
+12. Zero-cost abstractions SHOULD be leveraged where applicable
+
+## Implementation
+- Use stack allocation for small values and short-lived objects
+- Pass large values by reference instead of cloning
+- Use `String::with_capacity` and `Vec::with_capacity` when size is known
+- Choose appropriate collections: Vec, HashMap, BTreeMap, HashSet, etc.
+- Avoid unnecessary Box, Rc, and Arc usage
+- Use interior mutability patterns (Cell, RefCell) for targeted mutability
+- Implement custom iterators with `Iterator` trait
+- Use Iterator methods: map, filter, fold, etc. instead of explicit loops
+- Apply Rayon for parallelism on CPU-bound tasks
+- Use async/await for I/O-bound operations
+- Profile code using tools like perf, flamegraph, or criterion
+
+## Benefits
+- Reduced memory usage
+- Lower latency
+- Higher throughput
+- Improved CPU cache utilization
+- Better scalability under load
+- More efficient resource usage
+- Maintainable performance optimization
+- Data-driven optimization decisions
+- Leveraging Rust's zero-cost abstractions
+- Performance without sacrificing safety
+
+## Examples
+✅ Correct:
+```rust
+// Pre-allocating capacity for known sizes
+let mut names = Vec::with_capacity(100);
+for i in 0..100 {
+    names.push(format!("user-{}", i));
+}
+
+// Using iterators and adapters
+let sum: u32 = (0..1000)
+    .filter(|n| n % 2 == 0)
+    .map(|n| n * n)
+    .sum();
+
+// Passing large structs by reference
+fn process_data(data: &LargeStruct) -> Result<Output, Error> {
+    // Work with data by reference instead of moving or cloning
+}
+
+// Efficient string building
+let mut result = String::with_capacity(expected_size);
+for item in items {
+    result.push_str(&item.to_string());
+}
+
+// Using appropriate data structures
+let mut cache = HashMap::with_capacity(expected_items);
+for (k, v) in pairs {
+    cache.insert(k, v);
+}
+
+// Using parallel iterators for CPU-bound work
+use rayon::prelude::*;
+let sum: u64 = big_vector
+    .par_iter()
+    .filter(|&&x| x > 100)
+    .map(|&x| expensive_computation(x))
+    .sum();
+
+// Using async for I/O-bound operations
+async fn fetch_all(urls: Vec<String>) -> Result<Vec<Response>, Error> {
+    let mut tasks = Vec::with_capacity(urls.len());
+    for url in urls {
+        tasks.push(fetch_url(url));
+    }
+    let results = futures::future::join_all(tasks).await;
+    // Process results
+}
+```
+
+❌ Incorrect:
+```rust
+// Unnecessary cloning
+fn process_data(data: LargeStruct) -> Result<Output, Error> {
+    // This takes ownership and may cause unnecessary copying
+}
+
+// Inefficient string building
+let mut result = String::new();
+for i in 0..1000 {
+    result = result + &i.to_string(); // Creates a new allocation each iteration
+}
+
+// Unnecessary allocations in hot loops
+fn process_values(values: &[u32]) -> Vec<u32> {
+    let mut results = Vec::new(); // No capacity hint
+    for &val in values {
+        let temp = format!("Value: {}", val); // Unnecessary allocation
+        println!("{}", temp); // This is in a hot loop
+        results.push(val * 2);
+    }
+    results
+}
+
+// Using wrong data structure for access pattern
+// Frequently searching a vector by value is inefficient
+let mut users = Vec::new();
+// ... add users ...
+// Later repeatedly search:
+for _ in 0..1000 {
+    if let Some(user) = users.iter().find(|u| u.id == search_id) {
+        // Do something with user
+    }
+}
+// Should use HashMap keyed by ID instead
+
+// Missing parallelism for CPU-intensive work
+let results: Vec<_> = large_data_set
+    .iter()
+    .map(|item| expensive_computation(item))
+    .collect();
+// Should use par_iter() from rayon
+
+// Creating unnecessary temporary collections
+let filtered: Vec<_> = items.iter().filter(|item| item.is_valid()).collect();
+let mapped: Vec<_> = filtered.iter().map(|item| transform(item)).collect();
+let result: Vec<_> = mapped.iter().filter(|item| item.is_complete()).collect();
+// Should chain iterators instead
+``` 

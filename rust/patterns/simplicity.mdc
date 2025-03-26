@@ -1,0 +1,118 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Keep It Simple
+
+## Description
+This pattern rule encourages simplicity in Rust code design and implementation, avoiding unnecessary complexity and overengineering. The rule promotes writing straightforward code that solves the current problem without excessive abstraction or premature optimization for hypothetical future needs.
+
+<rule>
+name: simplicity_rule
+description: Promotes simple designs and implementations while avoiding unnecessary complexity
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Keep your Rust code simple and focused:
+      - Solve the current problem, not hypothetical future ones
+      - Avoid premature abstraction and optimization
+      - Use the simplest data structures that meet your needs
+      - Prefer clear, direct implementations over clever or complex ones
+      - Create focused modules with single responsibilities
+      - Write code that is easy to understand and reason about
+</rule>
+
+## Rule
+1. Code SHOULD solve the current problem without excessive anticipation of future needs
+2. Functions SHOULD be short and focused on a single task
+3. Types SHOULD be simple and represent clear concepts
+4. Abstractions SHOULD only be introduced when they reduce complexity or repetition
+5. Code SHOULD prefer explicit over implicit behavior
+6. Modules and components SHOULD have clear and focused responsibilities
+7. Premature optimization SHOULD be avoided
+8. Generic code SHOULD only be written when multiple concrete types are actually needed
+9. Code SHOULD be easily understood by other developers
+10. Code SHOULD minimize dependencies between components
+
+## Implementation
+- Start with the simplest solution that correctly solves the problem
+- Refactor only when there's a clear need or benefit
+- Choose straightforward algorithms and data structures
+- Avoid creating abstractions for just one or two use cases
+- Limit the scope and number of generic parameters
+- Write code with future maintainers in mind
+- Document complex sections when simplification isn't possible
+
+## Benefits
+- More maintainable and understandable code base
+- Lower cognitive load for developers
+- Easier onboarding for new team members
+- Faster development cycles
+- Fewer bugs and regressions
+- More direct path to working solutions
+- Better long-term adaptability to changing requirements
+
+## Examples
+✅ Correct:
+```rust
+// Simple, direct implementation focused on the current need
+fn calculate_average(numbers: &[f64]) -> Option<f64> {
+    if numbers.is_empty() {
+        return None;
+    }
+    
+    let sum: f64 = numbers.iter().sum();
+    Some(sum / numbers.len() as f64)
+}
+
+// Simple struct that clearly models the domain
+struct User {
+    id: UserId,
+    name: String,
+    email: String,
+}
+
+// Function with focused responsibility
+fn save_user(user: &User, db: &Database) -> Result<(), Error> {
+    db.insert("users", user)
+}
+```
+
+❌ Incorrect:
+```rust
+// Overly generic and complex for a simple need
+fn calculate_average<T, I, O>(values: I) -> Option<O> 
+where
+    T: Clone + Sum<T> + Div<T, Output = O>,
+    I: IntoIterator<Item = T>,
+    O: From<T>,
+    // ... more complex trait bounds
+{
+    // Complex implementation with many edge cases handled
+    // that aren't needed for the current use case
+}
+
+// Premature abstraction with complex inheritance
+trait Entity { /* ... */ }
+trait Repository<T: Entity> { /* ... */ }
+trait UserLike: Entity { /* ... */ }
+struct User { /* ... */ }
+struct UserRepository<T: UserLike, S: Storage> { /* ... */ }
+
+// Function trying to handle too many cases
+fn process_data<T>(
+    data: &[T],
+    pre_processor: Option<Box<dyn Fn(&T) -> T>>,
+    aggregator: Option<Box<dyn Fn(&[T]) -> Vec<T>>>,
+    post_processor: Option<Box<dyn Fn(Vec<T>) -> Output>>,
+) -> Result<Output, Vec<Error>> {
+    // Complex implementation trying to handle all possible scenarios
+}
+``` 

@@ -1,0 +1,432 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Behavior-Driven Development at the Application Boundary
+
+## Description
+This workflow rule enforces behavior-driven development (BDD) and test-driven development (TDD) practices at the application layer boundary. It focuses on writing tests against stable application interfaces rather than domain implementation details, starting with error cases before moving to success scenarios. The workflow strictly follows the red-green-refactor cycle, treating compilation errors as "red" failures. This approach ensures that tests validate application behavior without coupling to domain implementation, allowing for more flexible refactoring while maintaining test stability.
+
+<rule>
+name: bdd_tdd_small_steps_rule
+description: Enforces behavior-driven development workflow at the application boundary
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these BDD/TDD practices at the application boundary:
+      - Write tests in Given/When/Then or Arrange/Act/Assert style
+      - Start with a failing test (red phase, including compilation errors)
+      - Implement minimal code to make test pass (green phase)
+      - Refactor for clean code without changing behavior
+      - Never add test-specific references in application or domain code
+      - Never test domain entities directly, only through application layer
+      - Begin with tests for error cases before success scenarios
+      - Test behavior, not implementation details
+      - Mock external dependencies only, not domain components
+</rule>
+
+## Rule
+1. New functionality MUST have tests written against the application layer's public API before implementation
+2. Tests MUST NOT directly test domain entities or logic
+3. Tests MUST follow a behavior-driven style (Given/When/Then or Arrange/Act/Assert)
+4. Tests SHOULD focus on application behavior, not implementation details
+5. Tests SHOULD begin with error cases before success scenarios
+6. Implementation SHOULD be the minimal code needed to make tests pass
+7. Compilation errors MUST be treated as failing tests in the red phase
+8. Application and domain code MUST NOT contain any test references or conditional compilation for tests
+9. External dependencies SHOULD be mocked, not internal domain components
+10. Refactoring SHOULD be possible without changing tests
+11. Test commits SHOULD be separate from implementation commits
+12. Public APIs SHOULD be designed with testability in mind
+
+## Implementation
+- Write tests in Given/When/Then (or Arrange/Act/Assert) structure
+- Write the simplest failing test first (using actual failures or compilation errors)
+- Implement the minimal code to make the test pass
+- Refactor for clean code without changing behavior
+- Never add #[cfg(test)] or test-specific code in the application or domain source
+- Test domain entities only through the application layer that uses them
+- Keep test fixtures and mocks in test directories, never in application code
+- Start with simple error cases at the boundary layer
+- Progress to more complex error scenarios
+- Finally implement and test the success scenarios
+- Avoid exposing domain implementation details just for testing
+- Keep tests independent of how the domain functionality is implemented
+- Create test fixtures for complex application setup
+
+## Benefits
+- Consistent BDD/TDD discipline with clear phases for each development cycle
+- Tests remain stable during domain implementation refactoring
+- Clean separation between domain, application, and test code
+- Better focus on user/client requirements and behaviors
+- More flexible domain implementation options
+- Lower test maintenance cost
+- Tests that truly verify application behavior
+- Clearer documentation of application capabilities through tests
+- Protection against interface breakage
+- Ability to make major internal domain changes with confidence
+- Tests that serve as living documentation of system behavior
+
+## Examples
+✅ Correct workflow:
+```rust
+// Stage 1: Write a test for a simple error case at the application boundary
+#[test]
+fn should_reject_empty_article_title() {
+    // Given (Arrange)
+    let app = TestApp::new();
+    let article_request = ArticleRequest {
+        title: "".to_string(),
+        content: "Some content".to_string(),
+    };
+    
+    // When (Act)
+    let result = app.create_article(article_request);
+    
+    // Then (Assert)
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("title cannot be empty"));
+}
+
+// Implement minimal code to make the test pass
+impl ArticleService {
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        if req.title.is_empty() {
+            return Err(Error::new("title cannot be empty"));
+        }
+        
+        // Stub implementation
+        unimplemented!()
+    }
+}
+
+// Stage 2: Test for another error case
+#[test]
+fn should_reject_empty_article_content() {
+    // Given
+    let app = TestApp::new();
+    let article_request = ArticleRequest {
+        title: "Valid Title".to_string(),
+        content: "".to_string(),
+    };
+    
+    // When
+    let result = app.create_article(article_request);
+    
+    // Then
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("content cannot be empty"));
+}
+
+// Update implementation for the new test
+impl ArticleService {
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        if req.title.is_empty() {
+            return Err(Error::new("title cannot be empty"));
+        }
+        
+        if req.content.is_empty() {
+            return Err(Error::new("content cannot be empty"));
+        }
+        
+        // Stub implementation
+        unimplemented!()
+    }
+}
+
+// Stage 3: Test for repository failure at the boundary
+#[test]
+fn should_handle_repository_failure() {
+    // Given
+    let mut app = TestApp::new();
+    app.repository.set_failure(true);
+    let article_request = ArticleRequest {
+        title: "Valid Title".to_string(),
+        content: "Valid Content".to_string(),
+    };
+    
+    // When
+    let result = app.create_article(article_request);
+    
+    // Then
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("failed to save article"));
+}
+
+// Stage 4: Finally, test the success path
+#[test]
+fn should_create_valid_article() {
+    // Given
+    let app = TestApp::new();
+    let article_request = ArticleRequest {
+        title: "Valid Title".to_string(),
+        content: "Valid Content".to_string(),
+    };
+    
+    // When
+    let result = app.create_article(article_request);
+    
+    // Then
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert_eq!(response.title, "Valid Title");
+    assert_eq!(response.content, "Valid Content");
+    assert!(!response.id.is_empty());
+}
+
+// Complete implementation with application layer using domain entities
+impl ArticleService {
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        // Validate at application layer
+        if req.title.is_empty() {
+            return Err(Error::new("title cannot be empty"));
+        }
+        
+        if req.content.is_empty() {
+            return Err(Error::new("content cannot be empty"));
+        }
+        
+        // Use domain entities internally
+        let article = domain::Article::new(
+            domain::ArticleId::generate(),
+            domain::ArticleTitle::new(req.title)?,
+            domain::ArticleContent::new(req.content)?,
+            Utc::now(),
+        );
+        
+        // Use repository to persist
+        self.repository.save(&article)
+            .map_err(|e| Error::new(&format!("failed to save article: {}", e)))?;
+        
+        // Return DTO, not domain entity
+        Ok(ArticleResponse::from(article))
+    }
+}
+
+// Stage 5: Refactor without changing tests
+impl ArticleService {
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        // Refactored implementation internally, tests still pass
+        self.validate_article_request(&req)?;
+        
+        let article = self.create_domain_article(req)?;
+        
+        self.repository.save(&article)
+            .map_err(|e| Error::wrap(e, "failed to save article"))?;
+        
+        Ok(ArticleResponse::from(article))
+    }
+    
+    // Private domain-related implementation details that can change without affecting tests
+    fn validate_article_request(&self, req: &ArticleRequest) -> Result<(), Error> {
+        if req.title.is_empty() {
+            return Err(Error::new("title cannot be empty"));
+        }
+        
+        if req.content.is_empty() {
+            return Err(Error::new("content cannot be empty"));
+        }
+        
+        Ok(())
+    }
+    
+    fn create_domain_article(&self, req: ArticleRequest) -> Result<domain::Article, Error> {
+        // Domain logic encapsulated in application layer
+        Ok(domain::Article::new(
+            domain::ArticleId::generate(),
+            domain::ArticleTitle::new(req.title)?,
+            domain::ArticleContent::new(req.content)?,
+            Utc::now(),
+        ))
+    }
+}
+
+// Example of treating compilation errors as "red" phase
+// 1. Write a failing test that doesn't compile:
+#[test]
+fn should_publish_article() {
+    // Given
+    let app = TestApp::new();
+    let article_id = "test-id";
+    
+    // When
+    // This test won't compile because publish_article doesn't exist yet
+    let result = app.publish_article(article_id);
+    
+    // Then
+    assert!(result.is_ok());
+}
+
+// 2. Add just enough to make it compile and fail:
+impl ArticleService {
+    pub fn publish_article(&self, _id: &str) -> Result<(), Error> {
+
+// Not using BDD style (Given/When/Then)
+#[test]
+fn test_publish_article() {
+    let service = ArticleService::new(MockRepository::new());
+    assert!(service.publish_article("123").is_ok());
+    // No clear separation of Given/When/Then
+}
+
+// Not treating compilation errors as red phase
+// Just implementing everything at once:
+impl ArticleService {
+    pub fn publish_article(&self, id: &str) -> Result<(), Error> {
+        let article = self.repository.find_by_id(id)?;
+        if article.status == Status::Draft {
+            let mut published = article.clone();
+            published.status = Status::Published;
+            published.published_at = Some(Utc::now());
+            self.repository.save(&published)?;
+            self.notify_subscribers(&published)?;
+            return Ok(());
+        }
+        Err(Error::new("article already published"))
+    }
+}
+
+// And then writing tests:
+#[test]
+fn test_publish_article() {
+    // Test after implementation
+}
+        unimplemented!()
+    }
+}
+
+// 3. Make the test pass with minimal implementation:
+impl ArticleService {
+    pub fn publish_article(&self, id: &str) -> Result<(), Error> {
+        // Application layer finds the domain entity and calls domain methods
+        let article = self.repository.find_by_id(id)?;
+        let published = article.publish()?;
+        self.repository.save(&published)
+    }
+}
+```
+
+❌ Incorrect workflow:
+```rust
+// Directly testing domain entities (incorrect)
+#[test]
+fn test_article_domain_entity() {
+    // Testing domain directly rather than through application layer
+    let article = domain::Article::new(
+        domain::ArticleId::generate(),
+        "Test Title".to_string(),
+        "Test Content".to_string(),
+        Utc::now(),
+    );
+    
+    assert_eq!(article.title(), "Test Title");
+    assert_eq!(article.content(), "Test Content");
+}
+
+// Implementing without tests
+impl ArticleService {
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        // Implementing without any tests guiding the development
+        // Complex implementation with no test coverage
+    }
+}
+
+// Testing after implementation
+#[test]
+fn test_article_creation() {
+    // Writing tests after implementation is complete
+    let service = ArticleService::new();
+    let article = service.create_article(valid_request()).unwrap();
+    assert_eq!(article.title, "Title");
+}
+
+// Application code with test-specific elements
+pub struct ArticleService {
+    repository: Box<dyn ArticleRepository>,
+    
+    // Test-only field that shouldn't be in application code
+    #[cfg(test)]
+    pub test_mode: bool,
+}
+
+impl ArticleService {
+    pub fn new(repository: Box<dyn ArticleRepository>) -> Self {
+        Self { 
+            repository,
+            #[cfg(test)]
+            test_mode: false,
+        }
+    }
+    
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        // Special case just for testing
+        #[cfg(test)]
+        if self.test_mode {
+            return Ok(ArticleResponse {
+                id: "test-id".to_string(),
+                title: req.title,
+                content: req.content,
+                created_at: Utc::now(),
+            });
+        }
+        
+        // Normal code
+        // ...
+    }
+}
+
+// Test that's tightly coupled to domain implementation details
+#[test]
+fn test_article_creation_implementation() {
+    let service = ArticleService::new();
+    
+    // This test knows too much about domain implementation details
+    let validator_was_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let validator_clone = validator_was_called.clone();
+    
+    // Mocking domain components directly
+    service.domain_validator = Box::new(move |_| {
+        validator_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        true
+    });
+    
+    service.create_article(valid_request()).unwrap();
+    
+    // Testing that domain implementation was used - coupled to implementation
+    assert!(validator_was_called.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+// Not using BDD style (Given/When/Then)
+#[test]
+fn test_publish_article() {
+    let service = ArticleService::new(MockRepository::new());
+    assert!(service.publish_article("123").is_ok());
+    // No clear separation of Given/When/Then
+}
+
+// Not treating compilation errors as red phase
+// Just implementing everything at once:
+impl ArticleService {
+    pub fn publish_article(&self, id: &str) -> Result<(), Error> {
+        let article = self.repository.find_by_id(id)?;
+        if article.status == Status::Draft {
+            let mut published = article.clone();
+            published.status = Status::Published;
+            published.published_at = Some(Utc::now());
+            self.repository.save(&published)?;
+            self.notify_subscribers(&published)?;
+            return Ok(());
+        }
+        Err(Error::new("article already published"))
+    }
+}
+
+// And then writing tests:
+:

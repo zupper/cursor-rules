@@ -1,0 +1,256 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Containerized Development Workflow
+
+## Description
+This workflow rule enforces that all project operations must be executed within Docker containers to ensure consistent development environments and reproducible builds. This includes building, testing, linting, and running the project. The rule ensures that no development tasks are performed directly on the host system, preventing environment-specific issues and "works on my machine" problems.
+
+<rule>
+name: containerized_development_rule
+description: Enforces that all project operations run in Docker containers
+
+filters:
+  - type: file_path
+    pattern: ".*"
+
+actions:
+  - type: suggest
+    message: |
+      All project operations must run in Docker containers:
+      - Use docker-compose for development environment setup
+      - Run all builds inside containers
+      - Execute tests in containers
+      - Run clippy linting in containers
+      - Deploy and run the application in containers
+      - Use multi-stage builds to optimize container size
+      - Mount volumes for development to preserve cargo cache
+</rule>
+
+## Rule
+1. ALL project operations MUST be executed within Docker containers
+2. Development environment setup MUST use docker-compose
+3. Build operations MUST be performed in containers
+4. Tests MUST be run in containers
+5. Clippy linting MUST be executed in containers
+6. Application execution MUST occur in containers
+7. Development containers SHOULD mount cargo cache for efficiency
+8. Production containers MUST use multi-stage builds
+9. Container configurations MUST be version controlled
+10. Base images MUST specify exact versions
+11. Development and production containers SHOULD be defined separately
+12. Container health checks SHOULD be implemented
+
+## Implementation
+- Create a development-focused Dockerfile with all development tools
+- Create a production-focused Dockerfile using multi-stage builds
+- Define docker-compose.yml for development environment
+- Define docker-compose.prod.yml for production setup
+- Mount cargo cache in development containers
+- Include clippy in development container
+- Set up container health checks
+- Define container networking
+- Configure volume mounts for development
+- Specify resource limits
+- Set up logging configuration
+- Define restart policies
+
+## Benefits
+- Consistent development environment across team
+- Reproducible builds
+- Isolated dependencies
+- Simplified onboarding
+- Consistent testing environment
+- Reliable CI/CD pipeline
+- Prevention of environment-specific bugs
+- Efficient resource utilization
+- Clear separation of development and production concerns
+- Improved security through isolation
+
+## Examples
+✅ Correct:
+```dockerfile
+# Development Dockerfile
+FROM rust:1.75-slim-bookworm as development
+
+# Install development dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install clippy
+RUN rustup component add clippy
+
+WORKDIR /app
+
+# Development command
+CMD ["cargo", "run"]
+
+# Production Dockerfile
+FROM rust:1.75-slim-bookworm as builder
+
+WORKDIR /app
+COPY . .
+
+# Build release binary
+RUN cargo build --release
+
+# Production image
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/release/my-app /usr/local/bin/
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["my-app"]
+```
+
+```yaml
+# docker-compose.yml for development
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+    environment:
+      - RUST_LOG=debug
+    ports:
+      - "8000:8000"
+    command: cargo watch -x run
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+    command: cargo test
+
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+    command: cargo clippy -- -D warnings
+
+volumes:
+  cargo-cache:
+```
+
+Example scripts:
+```bash
+#!/bin/bash
+# build.sh
+docker-compose build
+
+#!/bin/bash
+# test.sh
+docker-compose run --rm test
+
+#!/bin/bash
+# lint.sh
+docker-compose run --rm lint
+
+#!/bin/bash
+# run.sh
+docker-compose up app
+```
+
+Example CI configuration:
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build and test
+        run: |
+          docker-compose build
+          docker-compose run --rm test
+          docker-compose run --rm lint
+```
+
+❌ Incorrect:
+```bash
+# Running directly on host (incorrect)
+cargo build
+cargo test
+cargo clippy
+
+# Missing volume mounts (incorrect)
+docker run rust:1.75 cargo test
+
+# No health checks (incorrect)
+FROM rust:1.75
+COPY . .
+RUN cargo build --release
+CMD ["./target/release/my-app"]
+
+# Mixing development and production concerns (incorrect)
+FROM rust:1.75
+RUN apt-get update && apt-get install -y vim git
+COPY . .
+RUN cargo build --release
+CMD ["./target/release/my-app"]
+
+# Not using multi-stage builds (incorrect)
+FROM rust:1.75
+COPY . .
+RUN cargo build --release
+CMD ["./target/release/my-app"]
+
+# Not specifying exact versions (incorrect)
+FROM rust:latest
+COPY . .
+RUN cargo build
+CMD ["cargo", "run"]
+```
+
+Example of incorrect project structure:
+```
+project/
+├── Dockerfile           # Single Dockerfile mixing dev and prod
+├── src/
+├── tests/
+└── run_tests.sh        # Direct host execution script
+```
+
+Instead use:
+```
+project/
+├── Dockerfile          # Production multi-stage build
+├── Dockerfile.dev      # Development environment
+├── docker-compose.yml  # Development orchestration
+├── docker-compose.prod.yml  # Production orchestration
+├── scripts/           # Container execution scripts
+│   ├── build.sh
+│   ├── test.sh
+│   ├── lint.sh
+│   └── run.sh
+├── src/
+└── tests/
+``` 

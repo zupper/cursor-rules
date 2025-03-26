@@ -1,0 +1,130 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Memory Safety Best Practices
+
+## Description
+This pattern rule promotes best practices for memory safety in Rust. It focuses on proper use of Rust's ownership model, borrowing rules, lifetimes, and safe alternatives to unsafe code, ensuring memory safety without sacrificing performance.
+
+<rule>
+name: memory_safety_rule
+description: Enforces memory safety best practices in Rust
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these memory safety best practices:
+      - Prefer borrowing (&T) over ownership when full ownership isn't needed
+      - Use &mut T only when you need to modify the value
+      - Keep mutable borrows as short-lived as possible
+      - Avoid Cell/RefCell unless absolutely necessary
+      - Minimize use of unsafe code and thoroughly document invariants
+      - Use Arc<T> for shared ownership in threaded contexts
+      - Consider using the type system to encode invariants
+</rule>
+
+## Rule
+1. Code SHOULD prefer immutable references (&T) when only reading data
+2. Mutable references (&mut T) SHOULD be scoped as narrowly as possible
+3. Functions SHOULD accept references rather than owned values when possible
+4. Type signatures MUST accurately reflect lifetime relationships
+5. Unsafe code blocks MUST be minimal and thoroughly documented
+6. Interior mutability (Cell, RefCell) SHOULD only be used when necessary
+7. Code SHOULD NOT fight the borrow checker with excessive cloning
+8. Smart pointers (Box, Rc, Arc) SHOULD be used for appropriate use cases
+9. Data structures SHOULD be designed to minimize lifetime complexity
+10. Zero-copy parsing and operations SHOULD be preferred where practical
+
+## Implementation
+- Design data structures with ownership in mind from the start
+- Use lifetime annotations to express relationships between references
+- Prefer stack allocation and references for most cases
+- Use Clone or Copy traits consciously and appropriately
+- Extract complex lifetime scenarios into helper functions
+- Document unsafe code with safety invariants that must be maintained
+- Use the type system to make invalid states unrepresentable
+
+## Benefits
+- Compile-time guarantees against memory bugs
+- No garbage collection overhead
+- No data races in concurrent code
+- Explicit control over memory allocation
+- Clear ownership semantics
+- Improved performance through zero-copy operations
+- Protection against null pointer dereferences
+
+## Examples
+✅ Correct:
+```rust
+// Taking references instead of ownership
+fn calculate_statistics(data: &[f64]) -> Statistics {
+    let sum: f64 = data.iter().sum();
+    let mean = sum / data.len() as f64;
+    // More calculations without cloning data
+    Statistics { mean, /* ... */ }
+}
+
+// Proper scoping of mutable borrows
+fn process_data(data: &mut [i32]) {
+    // Scope mutable borrow to this block only
+    {
+        let first_half = &mut data[..data.len()/2];
+        for item in first_half {
+            *item *= 2;
+        }
+    } // Mutable borrow ends here
+    
+    // Can use data again here
+    let sum: i32 = data.iter().sum();
+    println!("Sum after processing: {}", sum);
+}
+
+// Properly documented unsafe code
+/// Combines two slices into one.
+/// 
+/// # Safety
+/// 
+/// The caller must ensure that:
+/// 1. `first` and `second` point to contiguous memory
+/// 2. `first` ends exactly where `second` begins
+/// 3. Both slices have the same element type
+unsafe fn combine_slices<T>(first: &[T], second: &[T]) -> &[T] {
+    std::slice::from_raw_parts(
+        first.as_ptr(),
+        first.len() + second.len()
+    )
+}
+```
+
+❌ Incorrect:
+```rust
+// Taking ownership when a reference would suffice
+fn calculate_length(data: Vec<i32>) -> usize {
+    data.len() // Data is consumed unnecessarily
+}
+
+// Excessive cloning to fight the borrow checker
+fn process_names(names: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+    for name in names {
+        let mut name = name.clone(); // Unnecessary clone
+        name.push_str(" Processed");
+        result.push(name);
+    }
+    result
+}
+
+// Unsafe code without documentation
+unsafe fn dangerous_operation(ptr: *mut u8, len: usize) {
+    // No documentation of safety requirements
+    let slice = std::slice::from_raw_parts_mut(ptr, len);
+    // Operations on the slice...
+}
+``` 

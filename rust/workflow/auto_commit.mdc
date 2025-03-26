@@ -1,0 +1,63 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Automatic Conventional Commits
+
+## Description
+This workflow rule ensures that changes automatically performed by Cursor are committed to the repository using conventional commit standards. After Cursor modifies files due to Git operations, this rule will generate a concise, meaningful commit message (no more than 10 words) explaining what was changed.
+
+## Rule
+1. After Cursor automatically changes files following a Git commit, those changes MUST be committed
+2. All commit messages MUST follow the Conventional Commits specification
+3. Commit messages MUST have a type, optional scope, and description (e.g., "feat(api): add markdown upload endpoint")
+4. Commit messages MUST be concise, limited to 10 words maximum
+5. Commit messages MUST NOT contain newlines or excessive formatting
+6. Breaking changes MUST be prefixed with "BREAKING" in the commit message
+
+## Implementation
+- This rule monitors for events where Cursor automatically changes files
+- When detected, it stages the changed files with `git add`
+- It then generates a commit message with the following format:
+  ```
+  type(scope): brief description
+  ```
+- The description should be clear, concise, and limited to 10 words maximum
+- The commit type should be one of:
+  - feat: A new feature
+  - fix: A bug fix
+  - docs: Documentation changes
+  - style: Changes that don't affect code behavior (formatting, etc.)
+  - refactor: Code changes that neither fix bugs nor add features
+  - perf: Performance improvements
+  - test: Adding or correcting tests
+  - build: Changes to build system or dependencies
+  - ci: Changes to CI configuration
+  - chore: Other changes that don't modify source or test files
+
+## Benefits
+- Consistent commit history with meaningful messages
+- Concise and easy-to-read commit log
+- Simplified change tracking
+- Better readability in commit history views
+- Easier to scan on small screens/interfaces
+- Faster decision making during code reviews
+- Clearer version history
+
+## Examples
+✅ Correct Commit Message:
+```
+feat(markdown): add slug generation from filenames
+```
+
+❌ Incorrect Commit Message:
+```
+feat(markdown): add slug generation functionality for uploaded markdown files which enables the system to automatically create friendly URLs from the filenames, enhancing the user experience and improving SEO performance for the website content management system
+
+Generate slugs automatically from uploaded markdown filenames.
+This change was made in response to the prompt "update the API
+to infer slugs from filenames" to improve URL readability and
+consistency.
+``` 

@@ -1,0 +1,114 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Functional Programming Approach
+
+## Description
+This pattern rule encourages the use of functional programming approaches in Rust code where appropriate. Rust supports both imperative and functional programming paradigms, but functional approaches often lead to more concise, maintainable, and less error-prone code for many tasks.
+
+<rule>
+name: functional_approach_rule
+description: Encourages functional programming patterns in Rust code
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Consider using functional programming approaches in your Rust code:
+      - Use iterators instead of explicit loops where appropriate
+      - Prefer map, filter, fold, and other higher-order functions
+      - Use pure functions without side effects when possible
+      - Use Option and Result combinators (map, and_then, filter) over direct unwrapping
+      - Consider immutable data structures as your default
+      - Use closures to encapsulate behavior
+</rule>
+
+## Rule
+1. Code SHOULD use iterator methods (map, filter, fold) instead of explicit loops where appropriate
+2. Functions SHOULD be pure (no side effects) where practical
+3. Data SHOULD be immutable by default, with mutability only when necessary
+4. Code SHOULD use Option and Result combinators instead of explicit matching where appropriate
+5. Pattern matching SHOULD be used to destructure and process data
+6. Code SHOULD leverage closures to encapsulate behavior and create higher-order functions
+7. Code SHOULD minimize state mutations where possible
+8. Functions SHOULD focus on transforming data rather than modifying in-place
+
+## Implementation
+- Refactor loops to use iterator methods where appropriate
+- Make variables immutable (let instead of let mut) by default
+- Use functional combinators (.map(), .filter(), etc.) on Options and Results
+- Compose small, focused functions rather than large procedural ones
+- Structure code around data transformations
+- Use pure functions that don't depend on global state
+
+## Benefits
+- More concise and expressive code
+- Fewer bugs related to mutable state
+- Better parallelization potential
+- Easier reasoning about code behavior
+- More reusable components
+- Better alignment with Rust's focus on memory safety
+- Improved testability through pure functions
+
+## Examples
+✅ Correct:
+```rust
+// Functional approach using iterators and combinators
+fn process_data(data: &[i32]) -> Vec<String> {
+    data.iter()
+        .filter(|&n| n > &0)
+        .map(|n| n * 2)
+        .map(|n| format!("Item: {}", n))
+        .collect()
+}
+
+// Using Option combinators
+fn find_username(id: UserId) -> Option<String> {
+    get_user(id)
+        .map(|user| user.username)
+        .filter(|name| !name.is_empty())
+}
+
+// Using functional composition
+fn validate_and_process(input: &str) -> Result<ProcessedData, Error> {
+    validate_input(input)
+        .and_then(parse_input)
+        .and_then(process_data)
+}
+```
+
+❌ Incorrect:
+```rust
+// Imperative approach with explicit loops and mutable state
+fn process_data(data: &[i32]) -> Vec<String> {
+    let mut result = Vec::new();
+    for i in 0..data.len() {
+        let n = data[i];
+        if n > 0 {
+            let doubled = n * 2;
+            let formatted = format!("Item: {}", doubled);
+            result.push(formatted);
+        }
+    }
+    result
+}
+
+// Manual matching instead of combinators
+fn find_username(id: UserId) -> Option<String> {
+    let user = get_user(id);
+    if user.is_none() {
+        return None;
+    }
+    let name = user.unwrap().username;
+    if name.is_empty() {
+        return None;
+    }
+    Some(name)
+}
+``` 

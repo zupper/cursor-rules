@@ -1,0 +1,202 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Rust Documentation Best Practices
+
+## Description
+This pattern rule promotes comprehensive and effective documentation in Rust code. It focuses on ensuring that all public items are well-documented, with proper formatting, examples, and explanations of functionality. Good documentation makes code more maintainable, easier to use, and helps new contributors understand the codebase more quickly.
+
+<rule>
+name: rust_documentation_rule
+description: Enforces best practices for documenting Rust code
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these Rust documentation best practices:
+      - Document all public items with clear descriptions
+      - Include examples in documentation comments
+      - Document panics, errors, and edge cases
+      - Use Markdown formatting in doc comments
+      - Add crate-level documentation
+      - Document module organization
+      - Write documentation tests that serve as examples
+      - Include links to related items
+</rule>
+
+## Rule
+1. All public items (functions, structs, enums, traits, etc.) MUST have documentation comments
+2. Documentation comments SHOULD include examples of use
+3. Documentation SHOULD clearly state the purpose and behavior of the item
+4. Module-level documentation MUST provide an overview of the module's contents
+5. Crate-level documentation SHOULD describe the crate's purpose and organization
+6. Function documentation MUST specify preconditions, panics, and error returns
+7. Struct/enum documentation SHOULD explain what the type represents
+8. Trait documentation MUST explain the behavior contract
+9. Examples in documentation SHOULD be valid, compilable code
+10. Documentation SHOULD use proper Markdown formatting
+11. Documentation links SHOULD connect related items
+
+## Implementation
+- Use `///` or `/** */` for item documentation
+- Use `//!` or `/*! */` for module/crate documentation
+- Include runnable examples with `# Examples` sections
+- Document panics with `# Panics` sections
+- Document errors with `# Errors` sections
+- Use code blocks with ```rust syntax
+- Link to other items with `[item]`
+- Create documentation tests by writing examples in doc comments
+- Use Markdown formatting (lists, headers, emphasis)
+- Write documentation with clear, concise language
+
+## Benefits
+- Easier onboarding for new developers
+- Better understanding of code purpose and usage
+- Self-documenting code with built-in examples
+- Documentation that stays in sync with code
+- Improved public API usability
+- Extra validation through documentation tests
+- Better IDE support and autocomplete information
+- Reduced support burden through clear documentation
+
+## Examples
+✅ Correct:
+```rust
+/// A configuration object for the application.
+///
+/// This struct holds all configuration settings that control
+/// the behavior of the application. It can be created from a file
+/// or environment variables.
+///
+/// # Examples
+///
+/// Creating a configuration from a file:
+///
+/// ```
+/// use my_app::Config;
+/// let config = Config::from_file("config.toml").expect("Failed to load config");
+/// assert_eq!(config.timeout(), std::time::Duration::from_secs(30));
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the configuration file cannot be read or
+/// contains invalid configuration values.
+pub struct Config {
+    timeout: u64,
+    max_retries: u32,
+    endpoint: String,
+}
+
+impl Config {
+    /// Creates a new configuration instance from a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the configuration file
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the `Config` if successful, or an error if
+    /// the file could not be read or contained invalid configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::error::Error;
+    /// # use my_app::Config;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// let config = Config::from_file("config.toml")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+        // Implementation
+    }
+
+    /// Returns the configured request timeout.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use my_app::Config;
+    /// let config = Config::default();
+    /// let timeout = config.timeout();
+    /// assert!(timeout <= std::time::Duration::from_secs(60));
+    /// ```
+    pub fn timeout(&self) -> Duration {
+        Duration::from_secs(self.timeout)
+    }
+}
+
+//! A module for user authentication and authorization.
+//!
+//! This module provides functionality for:
+//! - User authentication against various backends
+//! - Permission checking and role-based access control
+//! - Session management
+//!
+//! # Examples
+//!
+//! ```
+//! use my_app::auth::{Authenticator, Credentials};
+//!
+//! let auth = Authenticator::new();
+//! let credentials = Credentials::new("username", "password");
+//!
+//! match auth.authenticate(&credentials) {
+//!     Ok(user) => println!("Authenticated as: {}", user.name()),
+//!     Err(e) => eprintln!("Authentication failed: {}", e),
+//! }
+//! ```
+```
+
+❌ Incorrect:
+```rust
+// No documentation at all
+pub struct Config {
+    timeout: u64,
+    max_retries: u32,
+    endpoint: String,
+}
+
+impl Config {
+    // Missing documentation
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+        // Implementation
+    }
+
+    // Minimal, unhelpful documentation
+    /// Gets the timeout.
+    pub fn timeout(&self) -> Duration {
+        Duration::from_secs(self.timeout)
+    }
+}
+
+// Poorly documented module with no examples or organization overview
+//! Authentication module.
+//! 
+//! Contains auth related functions.
+
+// Documented but missing critical information
+/// Authenticates a user.
+///
+/// Returns a result.
+pub fn authenticate(username: &str, password: &str) -> Result<User, AuthError> {
+    // Missing documentation of potential errors, panics or examples
+}
+
+/// A struct representing a user.
+pub struct User {
+    // No field documentation
+    id: UserId,
+    username: String,
+    email: String,
+} 

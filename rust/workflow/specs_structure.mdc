@@ -1,0 +1,122 @@
+---
+description:
+globs:
+alwaysApply: true
+
+# Specifications Structure
+
+## Description
+This workflow rule ensures that all feature specifications follow a consistent structure and are properly organized within the project. Each specification should focus on the core functionality of the feature, minimizing extra considerations and future-proofing to only the most essential aspects.
+
+<rule>
+name: specs_structure_rule
+description: Enforces consistent documentation structure for feature specifications
+
+filters:
+  - type: file_path
+    pattern: "specs/.*\\.md$"
+
+actions:
+  - type: validate
+    pattern: "^# [^\\n]+\\n"
+    message: "Specification must start with a top-level heading (# Title)"
+    
+  - type: validate
+    pattern: "## Description"
+    message: "Specification must include a Description section"
+    
+  - type: validate
+    pattern: "## Use Cases"
+    message: "Specification must include a Use Cases section"
+    
+  - type: validate
+    pattern: "## Requirements"
+    message: "Specification must include a Requirements section"
+    
+  - type: validate
+    pattern: "## Technical Details"
+    message: "Specification must include a Technical Details section"
+    
+  - type: validate
+    pattern: "^\\d{3}-[a-z0-9-]+\\.md$"
+    message: "Specification filename must follow the pattern: NNN-feature-name.md"
+</rule>
+
+## Rule
+1. All feature specifications MUST be placed in the `specs/` folder
+2. Each feature MUST have its own dedicated specification file
+3. File naming MUST follow the pattern: `NNN-feature-name.md` where NNN is a sequential number (e.g., 001, 002)
+4. The `specs/index.md` file MUST exist and provide an overview of all available specs
+5. Each specification MUST follow a consistent format that includes:
+   - Feature title as H1
+   - Description section focusing on core functionality
+   - Use cases section with primary scenarios only
+   - Requirements section listing essential requirements
+   - Technical details section with key implementation aspects
+   - Implementation status section
+
+## Implementation
+- When creating a new feature specification:
+  - Focus on the core functionality first
+  - Include only essential requirements
+  - Minimize future-proofing considerations
+  - Keep technical details focused on key aspects
+  - Avoid speculative features or "nice-to-haves"
+  - Document only what is necessary for the current implementation
+- Update the `specs/index.md` file to include the new specification
+- Review existing specifications to maintain focus and alignment
+
+## Benefits
+- Clear and concise documentation of feature requirements
+- Easier to understand and implement core functionality
+- Reduced scope creep in specifications
+- More maintainable documentation
+- Better focus on essential features
+- Faster implementation cycles
+
+## Examples
+✅ Correct:
+```markdown
+# Article Upload
+
+## Description
+Handles markdown file uploads and storage.
+
+## Use Cases
+1. Upload new article
+2. Store in content directory
+
+## Requirements
+1. Accept markdown files
+2. Store in filesystem
+3. Return file identifier
+
+## Technical Details
+- POST endpoint
+- File storage structure
+- Response format
+
+## Implementation Status
+**Status**: Not implemented
+```
+
+❌ Incorrect:
+```markdown
+# Article Upload
+
+## Description
+Comprehensive system for content management including uploads, versioning, workflows, etc.
+
+## Use Cases
+1. Upload new article
+2. Version control
+3. Content approval workflows
+4. Future integration with CMS
+5. Possible third-party storage
+
+## Requirements
+(Too many non-essential requirements)
+
+## Technical Details
+(Excessive implementation details)
+``` 

@@ -1,0 +1,123 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Rust Error Handling Best Practices
+
+## Description
+This pattern rule promotes effective and idiomatic error handling in Rust. It focuses on proper use of Result and Option types, error propagation, and creating custom error types that provide meaningful context while maintaining composability.
+
+<rule>
+name: rust_error_handling_rule
+description: Enforces best practices for error handling in Rust
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these error handling best practices:
+      - Use Result<T, E> for operations that can fail
+      - Use Option<T> for values that might be absent
+      - Prefer the ? operator for error propagation
+      - Create domain-specific error types
+      - Implement std::error::Error trait for custom error types
+      - Avoid unwrap() and expect() in production code
+      - Consider error context with anyhow or thiserror
+</rule>
+
+## Rule
+1. Functions that can fail MUST return Result<T, E> rather than panicking
+2. Functions that might not have a value to return MUST use Option<T>
+3. Error types SHOULD be defined at the appropriate level of abstraction
+4. Custom error types SHOULD implement the std::error::Error trait
+5. Error propagation SHOULD use the ? operator rather than match or unwrap
+6. Error messages MUST be clear, specific, and actionable
+7. Production code MUST NOT use unwrap() or expect() except in cases where the invariant is guaranteed
+8. Tests MAY use unwrap() or expect() for brevity
+9. Public API functions SHOULD NOT expose implementation-specific errors
+10. Error types SHOULD implement From<> for underlying error types to enable ? usage
+
+## Implementation
+- Define error enums with variants for each failure mode
+- Include context in errors to aid debugging and problem resolution
+- Implement the Error trait and Display for custom error types
+- Use crates like thiserror for deriving error implementations
+- Use anyhow for application code where error details aren't needed by callers
+- For library code, define specific error types rather than using anyhow
+- Use the ? operator for early returns and error propagation
+
+## Benefits
+- More reliable and robust code
+- Explicit handling of error cases
+- Better error messages for users and developers
+- Type-safe error handling enforced by the compiler
+- Clearer API contracts
+- Easier debugging and error tracing
+- No unexpected panics in production
+
+## Examples
+✅ Correct:
+```rust
+#[derive(Debug, thiserror::Error)]
+enum DataError {
+    #[error("Failed to read data: {0}")]
+    IoError(#[from] std::io::Error),
+    
+    #[error("Invalid data format at line {line}: {message}")]
+    FormatError { line: usize, message: String },
+    
+    #[error("Missing required field: {0}")]
+    MissingField(String),
+}
+
+fn read_data(path: &Path) -> Result<Data, DataError> {
+    let content = std::fs::read_to_string(path)?; // Uses From<io::Error> for DataError
+    
+    // Parse the content
+    if content.is_empty() {
+        return Err(DataError::MissingField("content".into()));
+    }
+    
+    // More processing...
+    Ok(Data { /* ... */ })
+}
+
+// In application code
+fn process_file(path: &Path) -> Result<ProcessedData, anyhow::Error> {
+    let data = read_data(path).context("Failed to read data file")?;
+    // Processing...
+    Ok(ProcessedData { /* ... */ })
+}
+```
+
+❌ Incorrect:
+```rust
+// Using unwrap in production code
+fn read_data(path: &Path) -> Data {
+    let content = std::fs::read_to_string(path).unwrap(); // Will panic on error
+    
+    // No error handling
+    Data { /* ... */ }
+}
+
+// Using string errors loses type information
+fn process_data(data: &str) -> Result<Output, String> {
+    if data.is_empty() {
+        return Err("Data is empty".to_string());
+    }
+    // Processing...
+    Ok(Output { /* ... */ })
+}
+
+// Returning overly generic errors
+fn api_function() -> Result<Value, Box<dyn std::error::Error>> {
+    // Implementation with no context on errors
+    let result = some_operation()?; // Error loses context
+    Ok(result)
+}
+``` 

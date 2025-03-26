@@ -1,0 +1,73 @@
+---
+description: Meta rule ensuring consistent organization of MDC rules
+globs: [".cursor/rules/*.mdc"]
+alwaysApply: true
+---
+
+# MDC Rules Location
+
+## Description
+This meta rule ensures that all new MDC (Model-Driven Code) rules are created in the `.cursor/rules` directory, maintaining a consistent and organized structure for rule management.
+
+<rule>
+name: mdc_location_rule
+description: Enforces proper location and organization of MDC rule files
+
+filters:
+  - type: file_extension
+    pattern: "\\.mdc$"
+
+actions:
+  - type: suggest
+    message: |
+      Please ensure all MDC rule files are:
+      1. Placed in the `.cursor/rules/{category}/` directory
+      2. Organized by their functional category (meta, workflow, architecture, patterns, project)
+      3. Named descriptively with the `.mdc` extension
+      4. Follow the proper rule structure format
+</rule>
+
+## Rule
+When creating new MDC rules:
+1. All new MDC rules MUST be created in the `.cursor/rules/{category}/` directory
+2. Each rule MUST be in a separate file
+3. Rule files MUST use the `.mdc` extension
+4. Rule files MUST follow the naming convention: `[rule-name].mdc`
+5. Rule files MUST contain proper markdown formatting
+
+## Implementation
+- The Cursor IDE will enforce this rule by:
+  - Automatically creating new MDC rules in the appropriate `.cursor/rules/{category}/` directory
+  - Preventing creation of MDC rules outside this directory structure
+  - Maintaining separation of rules into individual files
+  - Ensuring proper file extensions and naming conventions
+
+## Benefits
+- Improved organization and maintainability
+- Easier rule discovery and management
+- Consistent rule structure across the project
+- Better version control and tracking of rule changes
+
+## Examples
+✅ Correct:
+```
+.cursor/rules/
+  ├── meta/
+  │   ├── mdc-rules-location.mdc
+  │   └── mdc-rules-structure.mdc
+  ├── workflow/
+  │   └── specs-structure.mdc
+  ├── architecture/
+  │   └── dependency-inversion.mdc
+  └── patterns/
+      └── naming-convention.mdc
+```
+
+❌ Incorrect:
+```
+.cursor/
+  ├── rules/
+  │   └── random-rule.mdc
+  └── other-rules/
+      └── another-rule.mdc
+``` 

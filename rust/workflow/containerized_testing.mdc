@@ -1,0 +1,72 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Containerized Testing
+
+## Description
+This workflow rule enforces that all tests are run using the containerized test script (`./scripts/test.sh`) rather than running tests directly with commands like `cargo test`. This ensures tests run in the same consistent environment across all systems and maintains the containerized development approach.
+
+<rule>
+name: containerized_testing_rule
+description: Enforces that tests are run using the containerized test script
+
+filters:
+  - type: command_suggestion
+    pattern: "(cargo test|cargo nextest|rustup run .* cargo test)"
+
+actions:
+  - type: suggest
+    message: |
+      Please use the containerized test script instead of direct test commands:
+      
+      ./scripts/test.sh
+      
+      This ensures tests run in the same environment for all developers and CI.
+</rule>
+
+## Rule
+1. Tests MUST be run using the containerized test script (`./scripts/test.sh`)
+2. Direct test commands like `cargo test` or `cargo nextest` MUST NOT be used
+3. All test-related operations MUST be performed inside the container
+4. Test environments MUST match across all developers and CI systems
+
+## Implementation
+- The rule detects when a user attempts to run tests directly
+- It suggests using the containerized test script instead
+- The test script runs the tests inside the Docker container
+- This maintains consistency with the containerized development approach
+- The container uses the same dependencies and environment as defined in Dockerfile.dev
+
+## Benefits
+- Consistent test environment across all systems
+- Isolated dependencies
+- Prevents "works on my machine" issues
+- Ensures tests match CI environment
+- No need to install Rust or dependencies locally
+- Consistent with containerized development workflow
+- Clear pass/fail results regardless of local setup
+
+## Examples
+✅ Correct:
+```bash
+# Run all tests using the containerized script
+./scripts/test.sh
+
+# Run specific tests by passing additional args
+./scripts/test.sh -- my_module::tests
+```
+
+❌ Incorrect:
+```bash
+# Running tests directly without containerization
+cargo test
+
+# Running tests with nextest outside container
+cargo nextest run
+
+# Using rustup outside container
+rustup run stable cargo test
+``` 

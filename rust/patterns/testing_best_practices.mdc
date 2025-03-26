@@ -1,0 +1,352 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Rust Testing Best Practices
+
+## Description
+This pattern rule promotes effective testing practices in Rust code. It focuses on behavior-driven testing at the application layer boundary rather than testing domain entities or implementation details directly. Tests should be written against stable interfaces of the application layer (which uses domain entities directly), maintaining a focus on the behavior and API contract while avoiding coupling tests to domain implementation details. This approach follows the red-green-refactor cycle, treating compilation errors as failures in the "red" phase, and ensures clean separation between testing code and application code.
+
+<rule>
+name: rust_testing_practices_rule
+description: Enforces best practices for testing Rust code
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these Rust testing best practices:
+      - Test behavior at the application layer boundary, never test domain directly
+      - Write tests in a behavior-driven style (Given/When/Then)
+      - Avoid coupling tests to implementation details
+      - Test the stable application API, not individual domain functions
+      - Follow the error-first approach: simple errors → complex errors → happy paths
+      - Strictly follow the red-green-refactor cycle (compilation errors count as "red")
+      - Keep application code free from any test references
+      - Mock external dependencies, not internal domain components
+      - Test through the public application interface only
+      - Use test fixtures for complex setup
+</rule>
+
+## Rule
+1. Tests MUST focus on behavior at the application layer boundary
+2. Tests MUST NOT directly test domain entities or logic
+3. Tests SHOULD follow a behavior-driven style (Given/When/Then)
+4. Tests SHOULD NOT be tightly coupled to implementation details
+5. Tests SHOULD be written against the public application interface only
+6. Tests SHOULD follow the error-first approach: simple error cases, complex error cases, happy paths
+7. Each public interface SHOULD have tests covering its error and success scenarios
+8. Testing MUST follow the red-green-refactor cycle with compilation errors treated as "red"
+9. Application code MUST NOT contain any test references or conditional compilation for tests
+10. Tests SHOULD be independent and deterministic
+11. Integration tests SHOULD be placed in the `tests/` directory
+12. Test names SHOULD describe behavior, not implementation
+13. External dependencies SHOULD be mocked, not internal components or domain entities
+14. Test fixtures SHOULD be used for complex setup
+15. Tests SHOULD NOT break when refactoring internal implementation
+
+## Implementation
+- Test the public API of application services, not domain entities or private functions
+- Structure tests with behavior-driven arrangement (Given/When/Then)
+- Write tests that would remain valid even if the implementation changes
+- Always start with a failing test (including compilation errors) before implementation
+- Keep the red-green-refactor cycles small and focused
+- Use descriptive test names focused on behavior ("should_handle_invalid_input" vs "test_validate_input_function")
+- Start with error cases before testing success paths
+- Create mocks only for external dependencies, not for internal domain components
+- Never add #[cfg(test)] attributes or test-only code in application or domain source files
+- Keep testing utilities in separate test directories
+- Use test fixtures to simplify test setup
+- Ensure tests are not reading or manipulating internal state
+- Test from outside the application boundary inward
+- Avoid exposing domain internals just for testing purposes
+
+## Benefits
+- More resilient tests that don't break during refactoring
+- Closer alignment with actual user/consumer requirements
+- Clean separation between application, domain, and test code
+- Better discipline in following BDD and TDD cycles
+- Reduced test maintenance cost
+- Better decoupling of tests from implementation details
+- Improved focus on application behavior
+- Freedom to change domain implementation without breaking tests
+- Prevention of over-testing of internal components
+- Stable test suite throughout implementation changes
+- Tests that document system behavior from a user perspective
+
+## Examples
+✅ Correct:
+```rust
+// Testing the application layer boundary in a behavior-driven style
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    // Create a test fixture
+    fn setup_article_service() -> ArticleService<MockArticleRepository> {
+        let repository = MockArticleRepository::new();
+        ArticleService::new(repository)
+    }
+    
+    // Error cases first - testing through public API with BDD style
+    #[test]
+    fn should_reject_article_with_empty_title() {
+        // Given
+        let service = setup_article_service();
+        let article_request = ArticleRequest {
+            title: "".to_string(),
+            content: "Some content".to_string(),
+        };
+        
+        // When
+        let result = service.create_article(article_request);
+        
+        // Then
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("title cannot be empty"));
+    }
+    
+    #[test]
+    fn should_reject_article_with_empty_content() {
+        // Given
+        let service = setup_article_service();
+        let article_request = ArticleRequest {
+            title: "Valid Title".to_string(),
+            content: "".to_string(),
+        };
+        
+        // When
+        let result = service.create_article(article_request);
+        
+        // Then
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("content cannot be empty"));
+    }
+    
+    // More complex error case
+    #[test]
+    fn should_handle_repository_failures() {
+        // Given
+        let mut repository = MockArticleRepository::new();
+        repository.set_save_result(Err(Error::new("database connection failed")));
+        let service = ArticleService::new(repository);
+        let article_request = ArticleRequest {
+            title: "Valid Title".to_string(),
+            content: "Valid Content".to_string(),
+        };
+        
+        // When
+        let result = service.create_article(article_request);
+        
+        // Then
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("failed to save article"));
+    }
+    
+    // Happy path last
+    #[test]
+    fn should_create_article_with_valid_data() {
+        // Given
+        let service = setup_article_service();
+        let article_request = ArticleRequest {
+            title: "Valid Title".to_string(),
+            content: "Valid Content".to_string(),
+        };
+        
+        // When
+        let result = service.create_article(article_request);
+        
+        // Then
+        assert!(result.is_ok());
+        let created = result.unwrap();
+        assert_eq!(created.title, "Valid Title");
+        assert_eq!(created.content, "Valid Content");
+        assert!(!created.id.is_empty());
+    }
+}
+
+// Application layer using domain directly but tested at its boundary
+pub struct ArticleService<R: ArticleRepository> {
+    repository: R,
+}
+
+impl<R: ArticleRepository> ArticleService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+    
+    pub fn create_article(&self, req: ArticleRequest) -> Result<ArticleResponse, Error> {
+        // Validate at application layer
+        if req.title.is_empty() {
+            return Err(Error::new("title cannot be empty"));
+        }
+        
+        if req.content.is_empty() {
+            return Err(Error::new("content cannot be empty"));
+        }
+        
+        // Use domain directly in application layer
+        let article = domain::Article::new(
+            domain::ArticleId::generate(),
+            domain::ArticleTitle::new(req.title)?,
+            domain::ArticleContent::new(req.content)?,
+            Utc::now(),
+        );
+        
+        // Store via repository
+        self.repository.save(&article)
+            .map_err(|e| Error::new(&format!("failed to save article: {}", e)))?;
+        
+        // Return DTO, not domain entity
+        Ok(ArticleResponse::from(article))
+    }
+}
+
+// Integration test - also focused on application boundary
+// In tests/integration_test.rs
+use my_crate::*;
+
+// Error cases first with BDD style
+#[test]
+fn should_handle_invalid_api_requests() {
+    // Given
+    let app = TestApp::spawn();
+    
+    // When
+    let response = app.post("/api/articles", json!({
+        "title": "",
+        "content": "Some content"
+    }));
+    
+    // Then
+    assert_eq!(response.status(), 400);
+    assert!(response.json::<serde_json::Value>()["error"].as_str().unwrap()
+        .contains("title cannot be empty"));
+}
+
+// Happy path last
+#[test]
+fn should_manage_article_lifecycle() {
+    // Given
+    let app = TestApp::spawn();
+    
+    // When - Create article
+    let create_response = app.post("/api/articles", json!({
+        "title": "Test Article",
+        "content": "Test Content"
+    }));
+    
+    // Then
+    assert_eq!(create_response.status(), 201);
+    let article_id = create_response.json::<serde_json::Value>()["id"].as_str().unwrap();
+    
+    // When - Get article
+    let get_response = app.get(&format!("/api/articles/{}", article_id));
+    
+    // Then
+    assert_eq!(get_response.status(), 200);
+    let article = get_response.json::<serde_json::Value>();
+    assert_eq!(article["title"], "Test Article");
+    assert_eq!(article["content"], "Test Content");
+}
+```
+
+❌ Incorrect:
+```rust
+// Directly testing domain entities (incorrect)
+#[test]
+fn test_article_domain_entity() {
+    let article = domain::Article::new(
+        "id-123",
+        "Test Title",
+        "Test Content",
+        Utc::now()
+    );
+    
+    assert_eq!(article.title(), "Test Title");
+    assert_eq!(article.content(), "Test Content");
+}
+
+// Testing implementation details instead of behaviors
+#[test]
+fn test_validate_article_title() {
+    // Testing a private validation function directly
+    assert!(validate_article_title("Valid title"));
+    assert!(!validate_article_title(""));
+}
+
+// Application code with test-specific elements
+pub struct ArticleService {
+    repository: Box<dyn ArticleRepository>,
+    
+    // Test-only field that shouldn't be in production code
+    #[cfg(test)]
+    pub validator: Box<dyn Fn(&str) -> bool>,
+}
+
+impl ArticleService {
+    pub fn new(repository: Box<dyn ArticleRepository>) -> Self {
+        Self { 
+            repository,
+            #[cfg(test)]
+            validator: Box::new(|_| true),
+        }
+    }
+    
+    pub fn create_article(&self, req: ArticleRequest) -> Result<Article, Error> {
+        // Special case just for testing
+        #[cfg(test)]
+        if !self.validator(&req.title) {
+            return Err(Error::new("test validation failed"));
+        }
+        
+        // Normal code
+        if req.title.is_empty() {
+            return Err(Error::new("title cannot be empty"));
+        }
+        
+        // More code...
+    }
+}
+
+// Testing internal state instead of behavior
+#[test]
+fn test_article_repository_internal_cache() {
+    let repository = ArticleRepository::new();
+    repository.save(&article).unwrap();
+    
+    // Directly accessing internal cache - tightly coupled to implementation
+    assert!(repository.cache.contains_key(&article.id));
+}
+
+// Testing domain logic directly instead of through application layer
+#[test]
+fn test_domain_article_validation() {
+    // Directly calling domain validation instead of through application
+    assert!(domain::ArticleTitle::is_valid("Valid Title"));
+    assert!(!domain::ArticleTitle::is_valid(""));
+}
+
+// Not following red-green-refactor cycle
+// Writing implementation before test
+impl ArticleService {
+    pub fn delete_article(&self, id: &str) -> Result<(), Error> {
+        // Implementation without a test first
+        self.repository.delete(id)
+    }
+}
+
+// Writing test after implementation
+#[test]
+fn test_delete_article() {
+    let service = ArticleService::new(MockRepository::new());
+    assert!(service.delete_article("123").is_ok());
+}
+``` 

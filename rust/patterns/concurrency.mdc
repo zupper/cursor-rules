@@ -1,0 +1,184 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Concurrency Best Practices
+
+## Description
+This pattern rule promotes safe and effective concurrency patterns in Rust. It focuses on Rust's powerful concurrency primitives, memory safety guarantees, and idiomatic approaches to both thread-based and async programming.
+
+<rule>
+name: concurrency_patterns_rule
+description: Enforces safe concurrency patterns in Rust
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these concurrency best practices:
+      - Use message passing (channels) as the primary communication pattern
+      - Prefer Arc<T> for shared state across thread boundaries
+      - Use proper synchronization primitives (Mutex, RwLock) for shared mutable state
+      - Be wary of deadlocks with nested locks
+      - For async code, minimize .await points in critical sections
+      - Consider using threadpool/rayon for CPU-bound tasks
+      - Consider using async/await for I/O-bound tasks
+      - Propagate cancellation signals appropriately
+</rule>
+
+## Rule
+1. Thread communication SHOULD use channels (mpsc, crossbeam) as the primary pattern
+2. Shared state between threads MUST use proper synchronization
+3. Data shared between threads MUST be wrapped in Arc<T>
+4. Mutable shared state MUST use Arc<Mutex<T>> or Arc<RwLock<T>>
+5. Lock acquisition SHOULD be kept as brief as possible
+6. Code SHOULD avoid nested lock acquisitions when possible
+7. Thread spawning SHOULD handle panics and propagate errors properly
+8. Thread pools SHOULD be used for CPU-bound parallel work
+9. Async code SHOULD minimize .await points in critical sections
+10. Cancellation (via Drop or explicit signals) SHOULD be handled properly
+
+## Implementation
+- Use std::sync::mpsc or crossbeam channels for thread communication
+- Use rayon for data-parallel operations
+- Use tokio or async-std for async I/O operations
+- Use Arc<Mutex<T>> for shared mutable state across threads
+- Keep critical sections small to minimize contention
+- Use RwLock when read operations are more frequent
+- Consider atomic types for simple shared counters
+- Use thread pools to avoid thread explosion
+- Consider structured concurrency patterns for async code
+- Design for cancellation by regularly checking for stop signals
+
+## Benefits
+- Memory safety in concurrent code
+- No data races (enforced by the type system)
+- Efficient resource utilization
+- Clear ownership semantics across threads
+- Improved performance through parallelism
+- Effective handling of asynchronous I/O operations
+- Better responsiveness in interactive applications
+
+## Examples
+✅ Correct:
+```rust
+// Message passing with channels
+fn process_items(items: Vec<Item>) -> Result<Vec<ProcessedItem>, Error> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let item_count = items.len();
+    
+    // Spawn worker threads
+    let handles: Vec<_> = items.into_iter()
+        .map(|item| {
+            let tx = sender.clone();
+            std::thread::spawn(move || {
+                match process_item(item) {
+                    Ok(processed) => tx.send(Ok(processed)).unwrap(),
+                    Err(e) => tx.send(Err(e)).unwrap(),
+                }
+            })
+        })
+        .collect();
+    
+    // Collect results
+    let mut results = Vec::with_capacity(item_count);
+    for _ in 0..item_count {
+        results.push(receiver.recv()?);
+    }
+    
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("Thread panicked");
+    }
+    
+    // Unwrap results
+    results.into_iter().collect()
+}
+
+// Shared state with proper synchronization
+fn concurrent_counter() -> Arc<Mutex<Counter>> {
+    let counter = Arc::new(Mutex::new(Counter::new()));
+    
+    for _ in 0..10 {
+        let counter_clone = Arc::clone(&counter);
+        std::thread::spawn(move || {
+            // Small critical section with proper locking
+            let mut guard = counter_clone.lock().unwrap();
+            guard.increment();
+            // Lock is released when guard goes out of scope
+        });
+    }
+    
+    counter
+}
+
+// Async code with proper resource management
+async fn process_connections(listener: TcpListener) -> Result<(), Error> {
+    let (shutdown_sender, shutdown_receiver) = tokio::sync::broadcast::channel(1);
+    
+    loop {
+        tokio::select! {
+            result = listener.accept() => {
+                let (socket, _) = result?;
+                let shutdown_rx = shutdown_sender.subscribe();
+                
+                tokio::spawn(async move {
+                    handle_connection(socket, shutdown_rx).await
+                });
+            }
+            _ = tokio::signal::ctrl_c() => {
+                println!("Shutting down...");
+                shutdown_sender.send(()).ok();
+                break;
+            }
+        }
+    }
+    
+    Ok(())
+}
+```
+
+❌ Incorrect:
+```rust
+// Data race: sharing mutable data without synchronization
+fn data_race() {
+    let counter = Counter::new();
+    
+    let t1 = std::thread::spawn(move || {
+        // This is a data race! Undefined behavior.
+        counter.increment();
+    });
+    
+    let t2 = std::thread::spawn(move || {
+        // Also trying to access the same counter
+        counter.increment();
+    });
+    
+    t1.join().unwrap();
+    t2.join().unwrap(); // This will fail to compile
+}
+
+// Potential deadlock: nested lock acquisition
+fn potential_deadlock(lock1: &Mutex<Resource1>, lock2: &Mutex<Resource2>) {
+    let guard1 = lock1.lock().unwrap();
+    
+    // If another thread acquires lock2 then lock1, deadlock can occur
+    let guard2 = lock2.lock().unwrap();
+    
+    // Use resources...
+} // Both guards dropped here
+
+// Blocking in async code
+async fn bad_async_code() {
+    // This blocks the thread, defeating the purpose of async
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    
+    // Should use this instead:
+    // tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+}
+``` 

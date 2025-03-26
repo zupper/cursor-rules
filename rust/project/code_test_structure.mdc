@@ -1,0 +1,284 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Source and Test Directory Separation
+
+## Description
+This project rule enforces a clear separation between source code and tests, requiring source code to be placed in the `src` directory while tests are located in a parallel `test` directory. Application code must remain free from test-specific references or conditional compilation. Tests should focus on application behavior at module boundaries, follow the red-green-refactor cycle, and adhere to the error-first approach. This separation improves project organization, prevents tests from being tightly coupled to implementation, and provides a more stable test suite.
+
+<rule>
+name: code_test_directory_rule
+description: Enforces separation of source code and tests into distinct directories
+
+filters:
+  - type: file_path
+    pattern: ".*\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Maintain separation between source code and tests:
+      - All source code must be placed in the `src/` directory
+      - All tests must be placed in the `test/` directory parallel to `src/`
+      - Source code must NEVER contain test-specific references (#[cfg(test)])
+      - Tests should follow the red-green-refactor cycle with compilation errors as "red"
+      - Tests should focus on behavior at the application layer boundary
+      - Test error cases before success scenarios
+      - Integration tests should be placed in the `test/integration/` directory
+</rule>
+
+## Rule
+1. Source code MUST be placed in the `src` directory
+2. Tests MUST be placed in the `test` directory which is parallel to `src`
+3. Source code MUST NOT contain test-specific references or conditional compilation
+4. Tests MUST follow the red-green-refactor cycle, with compilation errors treated as part of the "red" phase
+5. The `test` directory structure SHOULD mirror the `src` directory structure
+6. Unit tests SHOULD test application behavior at module boundaries, not internal details
+7. Integration tests SHOULD be placed in `test/integration`
+8. Test files SHOULD focus on stable interfaces, not implementation details
+9. Tests SHOULD follow the error-first approach, testing error cases before success scenarios
+10. Test names SHOULD describe behavior ("should_reject_invalid_input") not implementation ("test_validate_function")
+11. Tests SHOULD NOT break when refactoring implementation details
+
+## Implementation
+- Organize code so that all production code resides in `src/`
+- Create a parallel `test/` directory for all test code
+- Never add #[cfg(test)] attributes or test-specific code in application source files
+- Follow the red-green-refactor cycle, with compilation errors treated as part of the "red" phase
+- Mirror the structure of the source directory in the test directory
+- Name test files to indicate which module they're testing, not individual functions
+- Focus tests on module boundaries and public interfaces
+- Avoid testing private functions or implementation details
+- Start with tests for error conditions before testing success scenarios
+- Use descriptive test names that describe behavior, not implementation
+- Create test fixtures for complex application setup
+- Mock external dependencies, not internal components
+
+## Benefits
+- Clear separation between production code and test code
+- Prevention of test-coupled application code
+- Disciplined TDD practice with well-defined phases
+- Tests remain stable during internal refactoring
+- Lower test maintenance cost
+- Better focus on application behavior rather than implementation details
+- More freedom to refactor without breaking tests
+- Comprehensive error case coverage
+- Improved clarity of application capabilities and API contracts
+- Prevention of tests that are too tightly coupled to implementation
+
+## Examples
+✅ Correct:
+```
+project/
+├── src/
+│   ├── main.rs
+│   ├── lib.rs        # Clean application code with no test references
+│   ├── models/
+│   │   ├── user.rs
+│   │   └── article.rs
+│   └── services/
+│       └── auth.rs
+└── test/
+    ├── models/
+    │   ├── user_test.rs  # Tests user module behavior, not implementation
+    │   └── article_test.rs
+    ├── services/
+    │   └── auth_test.rs  # Tests authentication boundary, not internal functions
+    └── integration/
+        ├── api_test.rs
+        └── end_to_end.rs
+```
+
+Example test file structure (focusing on behavior, not implementation):
+```rust
+// In test/services/auth_test.rs
+use crate::services::auth::AuthService;
+use crate::test_utils::MockUserRepository;
+
+// Create a test fixture for the service boundary
+fn setup_auth_service() -> AuthService<MockUserRepository> {
+    let repository = MockUserRepository::new();
+    AuthService::new(repository)
+}
+
+// Following red-green-refactor with error cases first
+// Red phase: Write failing test
+#[test]
+fn should_reject_login_with_empty_username() {
+    let service = setup_auth_service();
+    
+    let result = service.login("", "password123");
+    
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("username cannot be empty"));
+}
+
+#[test]
+fn should_reject_login_with_empty_password() {
+    let service = setup_auth_service();
+    
+    let result = service.login("username", "");
+    
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("password cannot be empty"));
+}
+
+// Test authentication failures using the public interface
+#[test]
+fn should_reject_login_with_invalid_credentials() {
+    let mut repository = MockUserRepository::new();
+    repository.set_verify_result(false);
+    let service = AuthService::new(repository);
+    
+    let result = service.login("username", "wrong_password");
+    
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("invalid credentials"));
+}
+
+// Success case last
+#[test]
+fn should_return_session_for_valid_login() {
+    let service = setup_auth_service();
+    
+    let result = service.login("valid_user", "valid_password");
+    
+    assert!(result.is_ok());
+    let session = result.unwrap();
+    assert!(!session.token.is_empty());
+    assert!(session.expires_at > chrono::Utc::now());
+}
+```
+
+Example application code (clean, without test references):
+```rust
+// In src/services/auth.rs
+pub struct AuthService<R: UserRepository> {
+    repository: R,
+}
+
+impl<R: UserRepository> AuthService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+    
+    pub fn login(&self, username: &str, password: &str) -> Result<Session, Error> {
+        if username.is_empty() {
+            return Err(Error::new("username cannot be empty"));
+        }
+        
+        if password.is_empty() {
+            return Err(Error::new("password cannot be empty"));
+        }
+        
+        if !self.repository.verify_credentials(username, password) {
+            return Err(Error::new("invalid credentials"));
+        }
+        
+        // Generate session
+        Ok(Session {
+            token: generate_token(),
+            user_id: username.to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+        })
+    }
+}
+```
+
+❌ Incorrect:
+```
+project/
+├── src/
+│   ├── main.rs
+│   ├── lib.rs
+│   ├── user.rs          # Contains embedded tests with #[cfg(test)]
+│   └── article.rs
+└── tests.rs             # All tests in a single file
+```
+
+Example of application code with test references (incorrect):
+```rust
+// src/services/auth.rs with test-specific elements (incorrect)
+pub struct AuthService {
+    repository: Box<dyn UserRepository>,
+    
+    // Test-only field that shouldn't be in production code
+    #[cfg(test)]
+    pub test_mode: bool,
+}
+
+impl AuthService {
+    pub fn new(repository: Box<dyn UserRepository>) -> Self {
+        Self { 
+            repository,
+            #[cfg(test)]
+            test_mode: false,
+        }
+    }
+    
+    pub fn login(&self, username: &str, password: &str) -> Result<Session, Error> {
+        // Special case just for testing
+        #[cfg(test)]
+        if self.test_mode {
+            return Ok(Session {
+                token: "test-token".to_string(),
+                user_id: username.to_string(),
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+            });
+        }
+        
+        // Normal implementation
+        if username.is_empty() {
+            return Err(Error::new("username cannot be empty"));
+        }
+        
+        // Rest of the implementation...
+    }
+    
+    // Tests embedded in source file
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        
+        #[test]
+        fn test_login() {
+            // Test implementation...
+        }
+    }
+}
+```
+
+or:
+
+```
+project/
+└── src/
+    ├── main.rs
+    ├── lib.rs
+    ├── models/
+    │   ├── user.rs
+    │   └── user_test.rs  # Tests mixed with source files
+    └── services/
+        ├── auth.rs
+        └── tests/        # Inconsistent test location
+            └── auth_test.rs
+```
+
+Example of not following red-green-refactor (incorrect):
+```rust
+// Implementing functionality without tests first
+pub fn process_order(order: Order) -> Result<OrderConfirmation, Error> {
+    // Complex implementation without prior test cases
+}
+
+// Writing tests after implementation is complete
+#[test]
+fn test_process_order() {
+    let order = Order { /* ... */ };
+    let result = process_order(order);
+    assert!(result.is_ok());
+}
+``` 

@@ -1,0 +1,133 @@
+---
+description: Meta rule defining the required structure for all MDC rule files
+globs: [".cursor/rules/**/*.mdc"]
+alwaysApply: true
+---
+
+# MDC Rules Structure
+
+## Description
+This meta rule defines the required structure and content format for all MDC (Model-Driven Code) rule files, ensuring consistency and completeness across all project rules.
+
+<rule>
+name: mdc_structure_rule
+description: Enforces consistent structure and formatting for all MDC rule files
+
+filters:
+  - type: file_extension
+    pattern: "\\.mdc$"
+
+actions:
+  - type: validate
+    pattern: "^---\\s*\\n(.*?)\\n---\\s*\\n"
+    message: "Rule files must start with a proper metadata block surrounded by triple dashes (---)"
+    
+  - type: validate
+    pattern: "^---\\s*\\n.*?description:\\s*([^\\n]+).*?\\n---"
+    message: "Rule files must include a description field in the metadata block"
+    
+  - type: validate
+    pattern: "^---\\s*\\n.*?globs:\\s*\\[.*?\\].*?\\n---"
+    message: "Rule files must include a globs field specifying which files the rule applies to"
+    
+  - type: validate
+    pattern: "# [^\\n]+\\n"
+    message: "Rule files must have a top-level heading (# Title)"
+</rule>
+
+## Rule
+Every MDC rule file MUST begin with a correctly formatted meta block followed by the content structure:
+
+1. Meta Block Requirements:
+   - Must be at the very top of the file
+   - is prefixed by ---
+   - Must include `description:` field with a concise explanation of the rule
+   - Must include `globs:` field listing file patterns the rule applies to
+   - Must include `alwaysApply:` field (true/false) indicating if rule should be applied automatically
+   - Fields must be in YAML format (key: value pairs)
+   - is suffixed by ---
+
+2. Content Structure (after meta block):
+   - Start with a H1 title (`# Title`)
+   - Include a `## Description` section explaining the rule's purpose
+   - Include a `<rule>` tag section with formal rule definition
+   - Include a `## Rule` section with clear, numbered instructions
+   - Include an `## Implementation` section detailing how to apply the rule
+   - Include a `## Benefits` section highlighting advantages of following the rule
+   - End with an `## Examples` section showing correct and incorrect implementations
+   - Use proper markdown formatting throughout
+
+## Implementation
+- All rule files MUST be written in markdown with `.mdc` extension
+- The meta block MUST be separated from the content by a blank line
+- Meta block must use proper YAML indentation
+- Each section MUST be separated by blank lines
+- Code examples MUST use triple backtick markdown code blocks with appropriate language hints
+- Numbered lists MUST be used for sequential instructions
+- Bulleted lists SHOULD be used for non-sequential items
+
+## Benefits
+- Consistent rule documentation across the project
+- Improved readability and understandability
+- Clear implementation guidance
+- Easier maintenance and updates
+- Better onboarding for new developers
+- Automatic rule application based on file contexts
+
+## Examples
+✅ Correct:
+```markdown
+---
+description: Rule for component structure
+globs: ["src/components/**/*.tsx", "src/components/**/*.jsx"]
+alwaysApply: true
+---
+
+# Component Structure Rule
+
+## Description
+Clear description of the component structure rule.
+
+<rule>
+name: component_structure_rule
+description: Enforces component structure standards
+// Rule definition here
+</rule>
+
+## Rule
+1. First instruction
+2. Second instruction
+3. Third instruction
+
+## Implementation
+- Implementation detail 1
+- Implementation detail 2
+
+## Benefits
+- Benefit 1
+- Benefit 2
+
+## Examples
+Examples of correct and incorrect usage.
+```
+
+❌ Incorrect:
+```markdown
+# Component Structure Rule
+
+description: Missing meta block at the top
+globs: ["src/components/**/*.tsx"]
+alwaysApply: true
+
+## Description
+Meta block in wrong position.
+
+## Rule
+1. First instruction
+2. Second instruction
+
+No implementation or benefits sections
+
+Examples:
+(missing code blocks)
+``` 

@@ -1,0 +1,172 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Rust API Design Principles
+
+## Description
+This pattern rule promotes idiomatic and ergonomic Rust API design. It focuses on creating intuitive, type-safe, and maintainable public interfaces that follow Rust community conventions and best practices while leveraging Rust's powerful type system.
+
+<rule>
+name: rust_api_design_rule
+description: Enforces idiomatic Rust API design principles
+
+filters:
+  - type: file_extension
+    pattern: "\\.rs$"
+
+actions:
+  - type: suggest
+    message: |
+      Follow these Rust API design principles:
+      - Make illegal states unrepresentable through the type system
+      - Use builders for complex object construction
+      - Follow the principle of least surprise in naming/behavior
+      - Leverage the type system for compile-time guarantees
+      - Prefer methods with &self over free functions
+      - Use newtype patterns to enforce type safety
+      - Consider impl trait for returning complex types
+      - Design error types to be informative and composable
+      - Be consistent with Rust standard library patterns
+</rule>
+
+## Rule
+1. APIs SHOULD make invalid states unrepresentable through the type system
+2. Complex object construction SHOULD use builder patterns
+3. Method names SHOULD follow Rust naming conventions
+4. Public APIs MUST be thoroughly documented with examples
+5. Conversion traits (From, Into, AsRef, etc.) SHOULD be implemented where appropriate
+6. Type parameters SHOULD use descriptive names rather than single letters for public APIs
+7. Public functions SHOULD validate their inputs
+8. Public APIs SHOULD minimize generic parameters where possible
+9. Error types MUST be designed to provide useful context to users
+10. Fallible operations SHOULD return Result rather than using panic
+
+## Implementation
+- Use newtypes (tuple structs with a single field) to create type distinctions
+- Implement appropriate traits (Display, Debug, etc.) for public types
+- Use enums with variants to represent different states
+- Create builder patterns for types with many optional fields
+- Use opaque types (impl Trait) for hiding implementation details
+- Implement Into/From for seamless conversions
+- Follow naming patterns from the standard library
+- Use associated types in traits to simplify type signatures
+- Validate inputs at API boundaries
+- Return descriptive errors with context
+
+## Benefits
+- APIs that are hard to misuse
+- Compile-time enforcement of invariants
+- Better developer experience
+- Self-documenting interfaces
+- Improved code maintainability
+- Compatibility with Rust ecosystem expectations
+- Fewer runtime errors through stronger type guarantees
+- Better discoverability through consistent patterns
+
+## Examples
+✅ Correct:
+```rust
+// Newtype pattern for type safety
+pub struct UserId(pub u64);
+pub struct User {
+    id: UserId,
+    name: String,
+    email: String,
+}
+
+// Builder pattern for complex construction
+pub struct UserBuilder {
+    id: UserId,
+    name: Option<String>,
+    email: Option<String>,
+    settings: HashMap<String, String>,
+}
+
+impl UserBuilder {
+    pub fn new(id: UserId) -> Self {
+        Self {
+            id,
+            name: None,
+            email: None,
+            settings: HashMap::new(),
+        }
+    }
+    
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+    
+    pub fn email(mut self, email: impl Into<String>) -> Self {
+        self.email = Some(email.into());
+        self
+    }
+    
+    pub fn setting(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.settings.insert(key.into(), value.into());
+        self
+    }
+    
+    pub fn build(self) -> Result<User, BuildError> {
+        let name = self.name.ok_or(BuildError::MissingName)?;
+        let email = self.email.ok_or(BuildError::MissingEmail)?;
+        
+        Ok(User {
+            id: self.id,
+            name,
+            email,
+        })
+    }
+}
+
+// Making invalid states unrepresentable
+pub enum ConnectionState {
+    Disconnected,
+    Connecting { retry_count: u32 },
+    Connected { connection: Connection },
+    Failed { error: ConnectionError },
+}
+
+// Using opaque return types
+pub fn get_processor(config: &Config) -> impl DataProcessor {
+    // Return a specific implementation without exposing its exact type
+    DefaultProcessor::new(config)
+}
+```
+
+❌ Incorrect:
+```rust
+// Not using type system for safety
+pub struct User {
+    id: u64,  // Should use UserId newtype
+    name: Option<String>,  // Should be non-optional or validate
+    email: String,
+}
+
+// Raw construction without validation
+impl User {
+    pub fn new(id: u64, name: Option<String>, email: String) -> Self {
+        Self { id, name, email }
+    }
+}
+
+// Using stringly-typed interfaces
+pub fn perform_action(user: &User, action_type: &str, params: HashMap<String, String>) -> Result<(), String> {
+    // Should use enums and strong typing instead of strings
+    match action_type {
+        "create" => create_something(user, &params),
+        "update" => update_something(user, &params),
+        "delete" => delete_something(user, &params),
+        _ => Err(format!("Unknown action: {}", action_type)),
+    }
+}
+
+// Exposing implementation details in public API
+pub fn get_processor(config: &Config) -> DefaultProcessor {
+    // Exposes the concrete type, making it harder to change implementation
+    DefaultProcessor::new(config)
+}
+``` 
